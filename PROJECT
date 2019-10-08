@@ -1,0 +1,3 @@
+version: "2"
+domain: google.com
+repo: github.com/GoogleCloudPlatform/gke-autoneg-controller
