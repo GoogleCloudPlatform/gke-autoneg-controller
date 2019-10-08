@@ -22,7 +22,7 @@ import (
 	"os"
 
 	"cloud.google.com/go/compute/metadata"
-	"github.com/GoogleCloudPlatform/autoneg/controllers"
+	"github.com/GoogleCloudPlatform/gke-autoneg-controller/controllers"
 	"google.golang.org/api/compute/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"

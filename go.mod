@@ -1,4 +1,4 @@
-module github.com/GoogleCloudPlatform/autoneg
+module github.com/GoogleCloudPlatform/gke-autoneg-controller
 
 go 1.12
 
