@@ -41,6 +41,12 @@ Specify options to configure the backends representing the NEGs that will be ass
 * `name`: optional. The name of the backend service to register backends with. Defaults to GKE service name.
 * `max_rate_per_endpoint`: required. Integer representing the maximum rate a pod can handle.
 
+## Installation
+
+`autoneg` is based on [Kubebuilder](https://kubebuilder.io), and as such, you can customize and deploy `autoneg` according to the Kubebuilder "Run It On the Cluster" section of the [Quick Start](https://kubebuilder.io/quick-start.html#run-it-on-the-cluster). `autoneg` does not define a CRD, so you can skip any Kubebuilder steps involving CRDs.
+
+For your convenience, you can also use the default output of Kubebuilder's `make deploy` step along with a public image. Simply `kubectl apply -f deploy/autoneg.yaml` to create the `autoneg-system` namespace and deploy `autoneg` into it.
+
 ## IAM considerations
 
 As `autoneg` is accessing GCP APIs, you must ensure that the controller has authorization to call those APIs. You may consider using Workload Identity to specify a GCP service account that `autoneg` operates under.
