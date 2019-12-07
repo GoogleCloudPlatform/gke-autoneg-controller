@@ -19,10 +19,16 @@ metadata:
     control-plane: controller-manager
   name: autoneg-system
 ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: autoneg-controller-manager
+  namespace: autoneg-system
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: autoneg-leader-election-role
+  name: autoneg-leader-election
   namespace: autoneg-system
 rules:
 - apiGroups:
@@ -56,12 +62,13 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   creationTimestamp: null
-  name: autoneg-manager-role
+  name: autoneg-manager
 rules:
 - apiGroups:
   - ""
   resources:
   - services
+  - events
   verbs:
   - get
   - list
@@ -82,7 +89,7 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: autoneg-proxy-role
+  name: autoneg-proxy
 rules:
 - apiGroups:
   - authentication.k8s.io
@@ -100,38 +107,38 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: autoneg-leader-election-rolebinding
+  name: autoneg-leader-election
   namespace: autoneg-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: autoneg-leader-election-role
+  name: autoneg-leader-election
 subjects:
 - kind: ServiceAccount
-  name: default
+  name: autoneg-controller-manager
   namespace: autoneg-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: autoneg-manager-rolebinding
+  name: autoneg-manager
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: autoneg-manager-role
+  name: autoneg-manager
 subjects:
 - kind: ServiceAccount
-  name: default
+  name: autoneg-controller-manager
   namespace: autoneg-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: autoneg-proxy-rolebinding
+  name: autoneg-proxy
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: autoneg-proxy-role
+  name: autoneg-proxy
 subjects:
 - kind: ServiceAccount
   name: default
@@ -146,7 +153,7 @@ metadata:
     prometheus.io/scrape: "true"
   labels:
     control-plane: controller-manager
-  name: autoneg-controller-manager-metrics-service
+  name: autoneg-controller-manager-metrics
   namespace: autoneg-system
 spec:
   ports:
@@ -173,6 +180,7 @@ spec:
       labels:
         control-plane: controller-manager
     spec:
+      serviceAccountName: autoneg-controller-manager
       containers:
       - args:
         - --secure-listen-address=0.0.0.0:8443
