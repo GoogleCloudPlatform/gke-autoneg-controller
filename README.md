@@ -41,12 +41,28 @@ Specify options to configure the backends representing the NEGs that will be ass
 * `name`: optional. The name of the backend service to register backends with. Defaults to GKE service name.
 * `max_rate_per_endpoint`: required. Integer representing the maximum rate a pod can handle.
 
-## Installation
-
-`autoneg` is based on [Kubebuilder](https://kubebuilder.io), and as such, you can customize and deploy `autoneg` according to the Kubebuilder "Run It On the Cluster" section of the [Quick Start](https://kubebuilder.io/quick-start.html#run-it-on-the-cluster). `autoneg` does not define a CRD, so you can skip any Kubebuilder steps involving CRDs.
-
-For your convenience, you can also use the default output of Kubebuilder's `make deploy` step along with a public image. Simply `kubectl apply -f deploy/autoneg.yaml` to create the `autoneg-system` namespace and deploy `autoneg` into it.
-
 ## IAM considerations
 
-As `autoneg` is accessing GCP APIs, you must ensure that the controller has authorization to call those APIs. You may consider using Workload Identity to specify a GCP service account that `autoneg` operates under.
+As `autoneg` is accessing GCP APIs, you must ensure that the controller has authorization to call those APIs. To follow the principle of least privilege, it is recommended that you configure your cluster with [Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity) to limit permissions to a GCP service account that `autoneg` operates under. If you choose not to use [Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity), you will need to create your GKE cluster with the "cloud-platform" scope.
+
+## Installation
+
+First, set up the GCP resources necessary to support [Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity), run the script:
+```
+PROJECT=myproject deploy/workload_identity.sh
+```
+Then, on each cluster in your project where you'd like to install `autoneg`, run these two commands:
+```
+kubectl apply -f deploy/autoneg.yaml
+
+kubectl annotate sa -n autoneg-system default \
+  iam.gke.io/gcp-service-account=autoneg-system@${PROJECT_ID}.iam.gserviceaccount.com
+```
+This will create all the Kubernetes resources required to support `autoneg` and annotate the default service account in the `autoneg-system` namespace to associate a GCP service account using [Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity). 
+
+### Customizing your installation
+`autoneg` is based on [Kubebuilder](https://kubebuilder.io), and as such, you can customize and deploy `autoneg` according to the Kubebuilder "Run It On the Cluster" section of the [Quick Start](https://kubebuilder.io/quick-start.html#run-it-on-the-cluster). `autoneg` does not define a CRD, so you can skip any Kubebuilder steps involving CRDs.
+
+The included `deploy/autoneg.yaml` is the default output of Kubebuilder's `make deploy` step, coupled with a public image.
+
+Do keep in mind the additional configuration to enable [Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity).
