@@ -1,5 +1,5 @@
 /*
-Copyright 2019 Google LLC.
+Copyright 2019-2021 Google LLC.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,11 +24,20 @@ import (
 )
 
 var (
-	malformedJSON  = `{`
-	validConfig    = `{"name":"test", "max_rate_per_endpoint":100}`
-	brokenConfig   = `{"name":"test", "max_rate_per_endpoint":"100"}`
-	validStatus    = `{}`
-	validNegConfig = `{}`
+	malformedJSON      = `{`
+	validConfig        = `{"backend_services":{"80":{"name":"http-be","max_rate_per_endpoint":100},"443":{"name":"https-be","max_connections_per_endpoint":1000}}}`
+	brokenConfig       = `{"backend_services":{"80":{"name":"http-be","max_rate_per_endpoint":"100"},"443":{"name":"https-be","max_connections_per_endpoint":1000}}}`
+	validStatus        = `{}`
+	validAutonegConfig = `{}`
+	validAutonegStatus = `{}`
+	invalidStatus      = `{`
+	oldValidConfig     = `{"name":"test", "max_rate_per_endpoint":100}`
+	oldBrokenConfig    = `{"name":"test", "max_rate_per_endpoint":"100"}`
+
+	validNegConfig   = `{"exposed_ports": {"80":{"name":"test"}}}`
+	wrongNegConfig   = `{"exposed_ports": {}}`
+	tooManyNegConfig = `{"exposed_ports": {"80":{"name":"test"},"443":{"name":"tls"}}}`
+	brokenNegConfig  = `{"exposed_ports": {}`
 )
 
 var statusTests = []struct {
@@ -86,19 +95,100 @@ var statusTests = []struct {
 		false,
 	},
 	{
-		"valid autoneg with invalid neg config",
+		"valid autoneg with valid neg status",
 		map[string]string{
 			autonegAnnotation:   validConfig,
-			negStatusAnnotation: malformedJSON,
+			negStatusAnnotation: validStatus,
+		},
+		true,
+		false,
+	},
+}
+
+var oldStatusTests = []struct {
+	name        string
+	annotations map[string]string
+	valid       bool
+	err         bool
+}{
+	{
+		"(legacy) not using autoneg",
+		map[string]string{},
+		false,
+		false,
+	},
+	{
+		"(legacy) autoneg with malformed config",
+		map[string]string{
+			oldAutonegAnnotation: malformedJSON,
+			negAnnotation:        validNegConfig,
 		},
 		true,
 		true,
 	},
 	{
-		"valid autoneg with valid neg config",
+		"(legacy) autoneg with broken config",
 		map[string]string{
-			autonegAnnotation:   validConfig,
-			negStatusAnnotation: validNegConfig,
+			oldAutonegAnnotation: oldBrokenConfig,
+			negAnnotation:        validNegConfig,
+		},
+		true,
+		true,
+	},
+	{
+		"(legacy) valid autoneg",
+		map[string]string{
+			oldAutonegAnnotation: oldValidConfig,
+			negAnnotation:        validNegConfig,
+		},
+		true,
+		false,
+	},
+	{
+		"(legacy) valid autoneg with too many ports",
+		map[string]string{
+			oldAutonegAnnotation: oldValidConfig,
+			negAnnotation:        tooManyNegConfig,
+		},
+		true,
+		true,
+	},
+	{
+		"(legacy) valid autoneg with invalid status",
+		map[string]string{
+			oldAutonegAnnotation:       oldValidConfig,
+			oldAutonegStatusAnnotation: malformedJSON,
+			negAnnotation:              validNegConfig,
+		},
+		true,
+		true,
+	},
+	{
+		"(legacy) valid autoneg with valid status",
+		map[string]string{
+			oldAutonegAnnotation:       oldValidConfig,
+			oldAutonegStatusAnnotation: validStatus,
+			negAnnotation:              validNegConfig,
+		},
+		true,
+		false,
+	},
+	{
+		"(legacy) valid autoneg with invalid neg status",
+		map[string]string{
+			oldAutonegAnnotation: oldValidConfig,
+			negStatusAnnotation:  malformedJSON,
+			negAnnotation:        validNegConfig,
+		},
+		true,
+		true,
+	},
+	{
+		"(legacy) valid autoneg with valid neg status",
+		map[string]string{
+			oldAutonegAnnotation: oldValidConfig,
+			negStatusAnnotation:  validAutonegStatus,
+			negAnnotation:        validNegConfig,
 		},
 		true,
 		false,
@@ -123,21 +213,39 @@ func TestGetStatuses(t *testing.T) {
 	}
 }
 
+func TestGetOldStatuses(t *testing.T) {
+	for _, st := range oldStatusTests {
+		_, valid, err := getStatuses("test", st.annotations)
+		if err != nil && !st.err {
+			t.Errorf("Set %q: expected no error, got one: %v", st.name, err)
+		}
+		if err == nil && st.err {
+			t.Errorf("Set %q: expected error, got none", st.name)
+		}
+		if !valid && st.valid {
+			t.Errorf("Set %q: expected autoneg config, got none", st.name)
+		}
+		if valid && !st.valid {
+			t.Errorf("Set %q: expected no autoneg config, got one", st.name)
+		}
+	}
+}
+
 var configTests = []struct {
 	name   string
-	config AutonegConfig
+	config OldAutonegConfig
 	err    bool
 }{
 	{
 		"default config",
-		AutonegConfig{},
+		OldAutonegConfig{},
 		false,
 	},
 }
 
 func TestValidateConfig(t *testing.T) {
 	for _, ct := range configTests {
-		err := validateConfig(ct.config)
+		err := validateOldConfig(ct.config)
 		if err == nil && ct.err {
 			t.Errorf("Set %q: expected error, got none", ct.name)
 		}
@@ -151,6 +259,7 @@ func relevantCopy(a compute.Backend) compute.Backend {
 	b := compute.Backend{}
 	b.Group = a.Group
 	b.MaxRatePerEndpoint = a.MaxRatePerEndpoint
+	b.MaxConnectionsPerEndpoint = a.MaxConnectionsPerEndpoint
 	return b
 }
 
@@ -179,48 +288,52 @@ var (
 
 	// initial state
 	statusInitial = AutonegStatus{AutonegConfig: configBasic}
-	backendsNone  = Backends{name: "test"}
+	backendsNone  = map[string]Backends{"80": Backends{name: "test"}}
 
 	// basic state
-	configBasic         = AutonegConfig{Name: "test", Rate: 100}
+	configBasicPort80 = AutonegNEGConfig{Name: "test", Rate: 100}
+	configBasic       = AutonegConfig{BackendServices: map[string]AutonegNEGConfig{"80": configBasicPort80}}
+
 	statusBasicWithNEGs = AutonegStatus{
 		AutonegConfig: configBasic,
 		NEGStatus:     negStatus,
 	}
-	backendsBasicWithNEGs = Backends{name: "test", backends: []compute.Backend{
-		statusBasicWithNEGs.Backend(getGroup(fakeProject, "zone1", fakeNeg)),
-		statusBasicWithNEGs.Backend(getGroup(fakeProject, "zone2", fakeNeg)),
-	}}
+	backendsBasicWithNEGs = map[string]Backends{"80": Backends{name: "test", backends: []compute.Backend{
+		statusBasicWithNEGs.Backend("80", getGroup(fakeProject, "zone1", fakeNeg)),
+		statusBasicWithNEGs.Backend("80", getGroup(fakeProject, "zone2", fakeNeg)),
+	}}}
 
 	// value changed state
-	configValueChange         = AutonegConfig{Name: "test", Rate: 200}
+	configValueChangePort80   = AutonegNEGConfig{Name: "test", Rate: 200}
+	configValueChange         = AutonegConfig{BackendServices: map[string]AutonegNEGConfig{"80": configValueChangePort80}}
 	statusValueChangeWithNEGs = AutonegStatus{
 		AutonegConfig: configValueChange,
 		NEGStatus:     negStatus,
 	}
-	backendsValueChangeWithNEGs = Backends{name: "test", backends: []compute.Backend{
-		statusValueChangeWithNEGs.Backend(getGroup(fakeProject, "zone1", fakeNeg)),
-		statusValueChangeWithNEGs.Backend(getGroup(fakeProject, "zone2", fakeNeg)),
-	}}
+	backendsValueChangeWithNEGs = map[string]Backends{"80": Backends{name: "test", backends: []compute.Backend{
+		statusValueChangeWithNEGs.Backend("80", getGroup(fakeProject, "zone1", fakeNeg)),
+		statusValueChangeWithNEGs.Backend("80", getGroup(fakeProject, "zone2", fakeNeg)),
+	}}}
 
 	// named changed state
-	configNameChange         = AutonegConfig{Name: "changed", Rate: 100}
+	configNameChangePort80   = AutonegNEGConfig{Name: "changed", Rate: 100}
+	configNameChange         = AutonegConfig{BackendServices: map[string]AutonegNEGConfig{"80": configNameChangePort80}}
 	statusNameChangeWithNEGs = AutonegStatus{
 		AutonegConfig: configNameChange,
 		NEGStatus:     negStatus,
 	}
-	backendsNameChangeWithNEGs = Backends{name: "changed", backends: []compute.Backend{
-		statusNameChangeWithNEGs.Backend(getGroup(fakeProject, "zone1", fakeNeg)),
-		statusNameChangeWithNEGs.Backend(getGroup(fakeProject, "zone2", fakeNeg)),
-	}}
+	backendsNameChangeWithNEGs = map[string]Backends{"80": Backends{name: "changed", backends: []compute.Backend{
+		statusNameChangeWithNEGs.Backend("80", getGroup(fakeProject, "zone1", fakeNeg)),
+		statusNameChangeWithNEGs.Backend("80", getGroup(fakeProject, "zone2", fakeNeg)),
+	}}}
 )
 
 var reconcileTests = []struct {
 	name     string
 	actual   AutonegStatus
 	intended AutonegStatus
-	remove   Backends
-	upsert   Backends
+	removes  map[string]Backends
+	upserts  map[string]Backends
 }{
 	{
 		"inital to basic",
@@ -247,12 +360,14 @@ var reconcileTests = []struct {
 
 func TestReconcileStatuses(t *testing.T) {
 	for _, rt := range reconcileTests {
-		remove, upsert := ReconcileStatus(fakeProject, rt.actual, rt.intended)
-		if !rt.remove.isEqual(remove) {
-			t.Errorf("Set %q: Removed backends: expected:\n%+v\n got:\n%+v", rt.name, rt.remove, remove)
-		}
-		if !rt.upsert.isEqual(upsert) {
-			t.Errorf("Set %q: Upserted backends: expected:\n%+v\n got:\n%+v", rt.name, rt.upsert, upsert)
+		removes, upserts := ReconcileStatus(fakeProject, rt.actual, rt.intended)
+		for port := range rt.removes {
+			if !rt.removes[port].isEqual(removes[port]) {
+				t.Errorf("Set %q: Removed port %s backends: expected:\n%+v\n got:\n%+v", rt.name, port, rt.removes[port], removes[port])
+			}
+			if !rt.upserts[port].isEqual(upserts[port]) {
+				t.Errorf("Set %q: Upserted port %s backends: expected:\n%+v\n got:\n%+v", rt.name, port, rt.upserts[port], upserts[port])
+			}
 		}
 	}
 }

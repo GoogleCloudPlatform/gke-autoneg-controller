@@ -1,5 +1,5 @@
 /*
-Copyright 2019 Google LLC.
+Copyright 2019-2021 Google LLC.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"sort"
 	"time"
 
 	"github.com/cenkalti/backoff"
@@ -28,9 +30,12 @@ import (
 )
 
 const (
-	autonegAnnotation             = "anthos.cft.dev/autoneg"
-	autonegStatusAnnotation       = "anthos.cft.dev/autoneg-status"
+	oldAutonegAnnotation          = "anthos.cft.dev/autoneg"
+	autonegAnnotation             = "controller.autoneg.dev/neg"
+	oldAutonegStatusAnnotation    = "anthos.cft.dev/autoneg-status"
+	autonegStatusAnnotation       = "controller.autoneg.dev/neg-status"
 	negStatusAnnotation           = "cloud.google.com/neg-status"
+	negAnnotation                 = "cloud.google.com/neg"
 	autonegFinalizer              = "anthos.cft.dev/autoneg"
 	computeOperationStatusDone    = "DONE"
 	computeOperationStatusRunning = "RUNNING"
@@ -46,12 +51,21 @@ var (
 
 // Backend returns a compute.Backend struct specified with a backend group
 // and the embedded AutonegConfig
-func (s AutonegStatus) Backend(group string) compute.Backend {
-	return compute.Backend{
-		Group:              group,
-		BalancingMode:      "RATE",
-		MaxRatePerEndpoint: s.AutonegConfig.Rate,
-		CapacityScaler:     1,
+func (s AutonegStatus) Backend(port string, group string) compute.Backend {
+	if s.AutonegConfig.BackendServices[port].Rate > 0 {
+		return compute.Backend{
+			Group:              group,
+			BalancingMode:      "RATE",
+			MaxRatePerEndpoint: s.AutonegConfig.BackendServices[port].Rate,
+			CapacityScaler:     1,
+		}
+	} else {
+		return compute.Backend{
+			Group:                     group,
+			BalancingMode:             "CONNECTION",
+			MaxConnectionsPerEndpoint: int64(s.AutonegConfig.BackendServices[port].Connections),
+			CapacityScaler:            1,
+		}
 	}
 }
 
@@ -116,101 +130,137 @@ func checkOperation(op *compute.Operation) error {
 // ReconcileBackends takes the actual and intended AutonegStatus
 // and attempts to apply the intended status or return an error
 func (b *BackendController) ReconcileBackends(actual, intended AutonegStatus) (err error) {
-	remove, upsert := ReconcileStatus(b.project, actual, intended)
+	removes, upserts := ReconcileStatus(b.project, actual, intended)
+	var oldSvc map[string]*compute.BackendService
 
-	var oldSvc, newSvc *compute.BackendService
-	oldSvc, err = b.getBackendService(remove.name)
-	if err != nil {
-		return
+	// Lookup backend services for the removals
+	for port, remove := range removes {
+		oldSvc[port], err = b.getBackendService(remove.name)
+		if err != nil {
+			return
+		}
 	}
 
 	// If we are changing backend services, operate on the current backend service
-	if upsert.name != remove.name {
-		if newSvc, err = b.getBackendService(upsert.name); err != nil {
-			return
-		}
-	} else {
-		newSvc = oldSvc
-	}
+	for port, upsert := range upserts {
+		var newSvc *compute.BackendService
+		remove := removes[port]
 
-	// Remove backends in the list to be deleted
-	for _, d := range remove.backends {
-		for i, be := range oldSvc.Backends {
-			if d.Group == be.Group {
-				oldSvc.Backends = append(oldSvc.Backends[:i], oldSvc.Backends[i+1:]...)
-				break
+		if upsert.name != remove.name {
+			if newSvc, err = b.getBackendService(upsert.name); err != nil {
+				return
+			}
+		} else {
+			newSvc = oldSvc[port]
+		}
+
+		// Remove backends in the list to be deleted
+		for _, d := range remove.backends {
+			for i, be := range oldSvc[port].Backends {
+				if d.Group == be.Group {
+					oldSvc[port].Backends = append(oldSvc[port].Backends[:i], oldSvc[port].Backends[i+1:]...)
+					break
+				}
 			}
 		}
-	}
 
-	// If we are changing backend services, save the old service
-	if upsert.name != remove.name {
-		if err = b.updateBackends(remove.name, oldSvc); err != nil {
-			return
-		}
-	}
-
-	// Add or update any new backends to the list
-	for _, u := range upsert.backends {
-		copy := true
-		for _, be := range newSvc.Backends {
-			if u.Group == be.Group {
-				// TODO: copy fields explicitly
-				be.MaxRatePerEndpoint = u.MaxRatePerEndpoint
-				copy = false
-				break
+		// If we are changing backend services, save the old service
+		if upsert.name != remove.name {
+			if err = b.updateBackends(remove.name, oldSvc[port]); err != nil {
+				return
 			}
 		}
-		if copy {
-			newBackend := u
-			newSvc.Backends = append(newSvc.Backends, &newBackend)
+
+		// Add or update any new backends to the list
+		for _, u := range upsert.backends {
+			copy := true
+			for _, be := range newSvc.Backends {
+				if u.Group == be.Group {
+					// TODO: copy fields explicitly
+					be.MaxRatePerEndpoint = u.MaxRatePerEndpoint
+					be.MaxConnectionsPerEndpoint = u.MaxConnectionsPerEndpoint
+					copy = false
+					break
+				}
+			}
+			if copy {
+				newBackend := u
+				newSvc.Backends = append(newSvc.Backends, &newBackend)
+			}
+		}
+		err = b.updateBackends(upsert.name, newSvc)
+		if err != nil {
+			return err
 		}
 	}
 
-	return b.updateBackends(upsert.name, newSvc)
+	return nil
 }
 
 // ReconcileStatus takes the actual and intended AutonegStatus
 // and returns sets of backends to remove, and to upsert
-func ReconcileStatus(project string, actual AutonegStatus, intended AutonegStatus) (remove, upsert Backends) {
+func ReconcileStatus(project string, actual AutonegStatus, intended AutonegStatus) (removes, upserts map[string]Backends) {
+	upserts = map[string]Backends{}
+	removes = map[string]Backends{}
+
 	// transform into maps with backend group as key
-	actualBE := map[string]struct{}{}
-	for _, neg := range actual.NEGs {
+	actualBE := map[string]map[string]struct{}{}
+	for port, neg := range actual.NEGs {
+		actualBE[port] = map[string]struct{}{}
 		for _, zone := range actual.Zones {
 			group := getGroup(project, zone, neg)
-			actualBE[group] = struct{}{}
+			actualBE[port][group] = struct{}{}
 		}
 	}
 
-	intendedBE := map[string]struct{}{}
-	for _, neg := range intended.NEGs {
+	intendedBE := map[string]map[string]struct{}{}
+	for port, neg := range intended.NEGs {
+		intendedBE[port] = map[string]struct{}{}
 		for _, zone := range intended.Zones {
 			group := getGroup(project, zone, neg)
-			intendedBE[group] = struct{}{}
+			intendedBE[port][group] = struct{}{}
 		}
 	}
 
-	// all intended backends are to be upserted
-	upsert.name = intended.Name
-	for i := range intendedBE {
-		be := intended.Backend(i)
-		upsert.backends = append(upsert.backends, be)
+	var intendedBEKeys []string
+	for k := range intendedBE {
+		intendedBEKeys = append(intendedBEKeys, k)
 	}
+	sort.Strings(intendedBEKeys)
 
-	// test to see if we are changing backend services
-	if actual.Name == intended.Name || actual.Name == "" {
-		// find backends to be deleted
-		remove.name = intended.Name
-		for a := range actualBE {
-			if _, ok := intendedBE[a]; !ok {
+	for _, port := range intendedBEKeys {
+		groups := intendedBE[port]
+		upsert := Backends{name: intended.BackendServices[port].Name}
+
+		var groupsKeys []string
+		for k := range groups {
+			groupsKeys = append(groupsKeys, k)
+		}
+		sort.Strings(groupsKeys)
+
+		for _, i := range groupsKeys {
+			be := intended.Backend(port, i)
+			upsert.backends = append(upsert.backends, be)
+		}
+		upserts[port] = upsert
+
+		remove := Backends{name: intended.BackendServices[port].Name}
+		// test to see if we are changing backend services
+		if actual.BackendServices[port].Name == intended.BackendServices[port].Name || actual.BackendServices[port].Name == "" {
+			// find backends to be deleted
+			for a := range actualBE[port] {
+				if _, ok := intendedBE[port][a]; !ok {
+					remove.backends = append(remove.backends, compute.Backend{Group: a})
+				}
+			}
+			removes[port] = remove
+		} else {
+			// moving to a different backend service means removing all actual backends
+			remove.name = actual.BackendServices[port].Name
+			for a := range actualBE[port] {
 				remove.backends = append(remove.backends, compute.Backend{Group: a})
 			}
-		}
-	} else {
-		// moving to a different backend service means removing all actual backends
-		remove.name = actual.Name
-		for a := range actualBE {
-			remove.backends = append(remove.backends, compute.Backend{Group: a})
+			removes[port] = remove
 		}
 	}
 
@@ -218,41 +268,111 @@ func ReconcileStatus(project string, actual AutonegStatus, intended AutonegStatu
 }
 
 func getGroup(project, zone, neg string) string {
-	return fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/networkEndpointGroups/%s", project, zone, neg)
+	return fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/networkBackendServices/%s", project, zone, neg)
 }
 
-func validateConfig(cfg AutonegConfig) error {
+func validateOldConfig(cfg OldAutonegConfig) error {
+	// do additional validation
+	return nil
+}
+
+func validateNewConfig(cfg AutonegConfig) error {
 	// do additional validation
 	return nil
 }
 
 func getStatuses(name string, annotations map[string]string) (s Statuses, valid bool, err error) {
-	// Is this service using autoneg?
-	tmp, ok := annotations[autonegAnnotation]
-	if !ok {
-		return
-	}
-	valid = true
-
-	if err = json.Unmarshal([]byte(tmp), &s.anConfig); err != nil {
-		return
-	}
-
-	// Default to the k8s service name
-	if s.anConfig.Name == "" {
-		s.anConfig.Name = name
-	}
-
-	// Is this autoneg config valid?
-	if err = validateConfig(s.anConfig); err != nil {
-		return
-	}
-
-	tmp, ok = annotations[autonegStatusAnnotation]
+	fmt.Fprintf(os.Stderr, "GET STATUS: %v and %v\n", negAnnotation, annotations)
+	// Read the current cloud.google.com/neg annotation
+	tmp, ok := annotations[negAnnotation]
 	if ok {
 		// Found a status, decode
-		if err = json.Unmarshal([]byte(tmp), &s.anStatus); err != nil {
+		if err = json.Unmarshal([]byte(tmp), &s.negConfig); err != nil {
 			return
+		}
+	}
+
+	// Is this service using autoneg in new mode?
+	oldOk := false
+	tmp, newOk := annotations[autonegAnnotation]
+	if newOk {
+		valid = true
+
+		if err = json.Unmarshal([]byte(tmp), &s.nanConfig); err != nil {
+			return
+		}
+
+		// Default to the k8s service name + port
+		for port, cfg := range s.nanConfig.BackendServices {
+			if cfg.Name == "" {
+				s.nanConfig.BackendServices[port] = AutonegNEGConfig{
+					Name:        fmt.Sprintf("%s-%s", name, port),
+					Rate:        cfg.Rate,
+					Connections: cfg.Connections,
+				}
+			}
+		}
+
+		// Is this autoneg config valid?
+		if err = validateNewConfig(s.nanConfig); err != nil {
+			return
+		}
+
+		s.newConfig = true
+
+		tmp, ok = annotations[autonegStatusAnnotation]
+		if ok {
+			// Found a status, decode
+			if err = json.Unmarshal([]byte(tmp), &s.nanStatus); err != nil {
+				return
+			}
+		}
+	}
+	if !newOk {
+		// Is this service using autoneg in legacy mode?
+		tmp, oldOk = annotations[oldAutonegAnnotation]
+		if oldOk {
+			valid = true
+
+			if err = json.Unmarshal([]byte(tmp), &s.anConfig); err != nil {
+				return
+			}
+
+			// Default to the k8s service name
+			if s.anConfig.Name == "" {
+				s.anConfig.Name = name
+			}
+
+			// Is this autoneg config valid?
+			if err = validateOldConfig(s.anConfig); err != nil {
+				return
+			}
+
+			// Convert the old configuration to a new style configuration
+			s.nanConfig.BackendServices = make(map[string]AutonegNEGConfig, 1)
+			if len(s.negConfig.ExposedPorts) == 1 {
+				var firstPort string
+				for k, _ := range s.negConfig.ExposedPorts {
+					firstPort = k
+					break
+				}
+				s.nanConfig.BackendServices[firstPort] = AutonegNEGConfig{
+					Name:        s.anConfig.Name,
+					Rate:        s.anConfig.Rate,
+					Connections: 0,
+				}
+			} else {
+				err = errors.New(fmt.Sprintf("more than one port in %s, but autoneg configuration is for one or no ports", negAnnotation))
+				return
+			}
+
+			tmp, ok = annotations[oldAutonegStatusAnnotation]
+			if ok {
+				// Found a status, decode
+				if err = json.Unmarshal([]byte(tmp), &s.anStatus); err != nil {
+					return
+				}
+			}
 		}
 	}
 
@@ -263,6 +383,5 @@ func getStatuses(name string, annotations map[string]string) (s Statuses, valid 
 			return
 		}
 	}
-
 	return
 }
