@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/googleapi"
@@ -71,11 +72,44 @@ func (b *BackendController) updateBackends(name string, svc *compute.BackendServ
 	if len(svc.Backends) == 0 {
 		svc.NullFields = []string{"Backends"}
 	}
-	// Perform optimistic locking to ensure we patch the intended object version
-	p := compute.NewBackendServicesService(b.s).Patch(b.project, name, svc)
-	p.Header().Set("If-match", svc.Header.Get("ETag"))
-	_, err := p.Do()
-	return err
+	count := 0
+	for count < 5 {
+		p := compute.NewBackendServicesService(b.s).Patch(b.project, name, svc)
+		p.Header().Set("If-match", svc.Header.Get("ETag"))
+		res, err := p.Do()
+		if err != nil {
+			return err
+		}
+		err = b.checkOperation(res.Name)
+		if err != nil {
+			count++
+			continue
+		}
+		return nil
+	}
+
+	return errors.New("max retries for applying patch reached")
+}
+
+func (b *BackendController) checkOperation(name string) error {
+	count := 0
+	for {
+		if count == 5 {
+			return errors.New("max retries reached")
+		}
+		op, err := compute.NewGlobalOperationsService(b.s).Get(b.project, name).Do()
+		if err != nil {
+			return err
+		}
+		if op.Status == "DONE" {
+			if op.Error == nil {
+				return nil
+			}
+			return errors.New("operation failed")
+		}
+		time.Sleep(5 * time.Second)
+		count++
+	}
 }
 
 // ReconcileBackends takes the actual and intended AutonegStatus
@@ -88,7 +122,6 @@ func (b *BackendController) ReconcileBackends(actual, intended AutonegStatus) (e
 	if err != nil {
 		return
 	}
-
 	// If we are changing backend services, operate on the current backend service
 	if upsert.name != remove.name {
 		if newSvc, err = b.getBackendService(upsert.name); err != nil {
