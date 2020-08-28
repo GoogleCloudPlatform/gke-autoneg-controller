@@ -24,6 +24,7 @@ import (
 	"cloud.google.com/go/compute/metadata"
 	"github.com/GoogleCloudPlatform/gke-autoneg-controller/controllers"
 	"google.golang.org/api/compute/v1"
+	"google.golang.org/api/option"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -32,6 +33,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	// +kubebuilder:scaffold:imports
 )
+
+const useragent = "google-pso-tool/gke-autoneg-controller/0.9.0"
 
 var (
 	scheme   = runtime.NewScheme()
@@ -58,7 +61,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	s, err := compute.NewService(ctx)
+	s, err := compute.NewService(ctx, option.WithUserAgent(useragent))
 	if err != nil {
 		setupLog.Error(err, "can't request Google compute service")
 		os.Exit(1)
