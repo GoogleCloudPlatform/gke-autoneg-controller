@@ -19,7 +19,7 @@ gcloud iam service-accounts add-iam-policy-binding \
   --member "serviceAccount:${PROJECT_ID}.svc.id.goog[autoneg-system/default]" \
   autoneg-system@${PROJECT_ID}.iam.gserviceaccount.com
 
-gcloud iam roles update autoneg --project ${PROJECT_ID} \
+gcloud iam roles create autoneg --project ${PROJECT_ID} \
   --permissions=compute.backendServices.get,compute.backendServices.update,compute.networkEndpointGroups.use,compute.healthChecks.useReadOnly
 gcloud projects add-iam-policy-binding \
   --role projects/${PROJECT_ID}/roles/autoneg \
