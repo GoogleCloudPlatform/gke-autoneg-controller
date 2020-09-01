@@ -49,7 +49,7 @@ As `autoneg` is accessing GCP APIs, you must ensure that the controller has auth
 
 First, set up the GCP resources necessary to support [Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity), run the script:
 ```
-PROJECT=myproject deploy/workload_identity.sh
+PROJECT_ID=myproject deploy/workload_identity.sh
 ```
 Then, on each cluster in your project where you'd like to install `autoneg`, run these two commands:
 ```
