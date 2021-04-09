@@ -17,19 +17,24 @@ limitations under the License.
 package controllers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 
+	"github.com/cenkalti/backoff"
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/googleapi"
 )
 
 const (
-	autonegAnnotation       = "anthos.cft.dev/autoneg"
-	autonegStatusAnnotation = "anthos.cft.dev/autoneg-status"
-	negStatusAnnotation     = "cloud.google.com/neg-status"
-	autonegFinalizer        = "anthos.cft.dev/autoneg"
+	autonegAnnotation             = "anthos.cft.dev/autoneg"
+	autonegStatusAnnotation       = "anthos.cft.dev/autoneg-status"
+	negStatusAnnotation           = "cloud.google.com/neg-status"
+	autonegFinalizer              = "anthos.cft.dev/autoneg"
+	computeOperationStatusDone    = "DONE"
+	computeOperationStatusRunning = "RUNNING"
+	computeOperationStatusPending = "PENDING"
 )
 
 var (
@@ -74,8 +79,39 @@ func (b *BackendController) updateBackends(name string, svc *compute.BackendServ
 	// Perform optimistic locking to ensure we patch the intended object version
 	p := compute.NewBackendServicesService(b.s).Patch(b.project, name, svc)
 	p.Header().Set("If-match", svc.Header.Get("ETag"))
-	_, err := p.Do()
+	res, err := p.Do()
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	err = backoff.Retry(
+		func() error {
+			op, err := compute.NewGlobalOperationsService(b.s).Get(b.project, res.Name).Do()
+			if err != nil {
+				return err
+			}
+			return checkOperation(ctx, op)
+		}, backoff.WithContext(backoff.NewExponentialBackOff(), ctx))
 	return err
+}
+
+func checkOperation(ctx context.Context, op *compute.Operation) error {
+	switch op.Status {
+	case computeOperationStatusPending:
+		return errors.New("operation pending")
+	case computeOperationStatusRunning:
+		return errors.New("operation running")
+	case computeOperationStatusDone:
+		if op.Error != nil {
+			// wrap with cancellable context
+			_, cancel := context.WithCancel(ctx)
+			// patch operation failed, cancel context and return error
+			cancel()
+			return fmt.Errorf("operation %d failed", op.Id)
+		}
+		return nil
+	}
+	return fmt.Errorf("unknown operation state: %s", op.Status)
 }
 
 // ReconcileBackends takes the actual and intended AutonegStatus

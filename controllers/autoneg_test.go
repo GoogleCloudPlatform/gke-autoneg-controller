@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -253,6 +254,56 @@ func TestReconcileStatuses(t *testing.T) {
 		}
 		if !rt.upsert.isEqual(upsert) {
 			t.Errorf("Set %q: Upserted backends: expected:\n%+v\n got:\n%+v", rt.name, rt.upsert, upsert)
+		}
+	}
+}
+
+func Test_checkOperation(t *testing.T) {
+	type test struct {
+		op *compute.Operation
+	}
+
+	tests := []test{
+		{
+			op: &compute.Operation{
+				Status: "invalid",
+			},
+		},
+		{
+			op: &compute.Operation{
+				Status: computeOperationStatusPending,
+			},
+		},
+		{
+			op: &compute.Operation{
+				Status: computeOperationStatusRunning,
+			},
+		},
+		{
+			op: &compute.Operation{
+				Status: computeOperationStatusDone,
+				Error:  &compute.OperationError{},
+			},
+		},
+	}
+	for i, tt := range tests {
+		err := checkOperation(context.Background(), tt.op)
+		if err == nil {
+			t.Errorf("%d: failed.", i+1)
+		}
+	}
+
+	tests = []test{
+		{
+			op: &compute.Operation{
+				Status: computeOperationStatusDone,
+			},
+		},
+	}
+	for i, tt := range tests {
+		err := checkOperation(context.Background(), tt.op)
+		if err != nil {
+			t.Errorf("%d: failed.", i+1)
 		}
 	}
 }
