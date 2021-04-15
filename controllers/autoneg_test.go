@@ -17,7 +17,6 @@ limitations under the License.
 package controllers
 
 import (
-	"context"
 	"reflect"
 	"testing"
 
@@ -260,7 +259,8 @@ func TestReconcileStatuses(t *testing.T) {
 
 func Test_checkOperation(t *testing.T) {
 	type test struct {
-		op *compute.Operation
+		noErr bool
+		op    *compute.Operation
 	}
 
 	tests := []test{
@@ -268,41 +268,37 @@ func Test_checkOperation(t *testing.T) {
 			op: &compute.Operation{
 				Status: "invalid",
 			},
+			noErr: false,
 		},
 		{
 			op: &compute.Operation{
 				Status: computeOperationStatusPending,
 			},
+			noErr: false,
 		},
 		{
 			op: &compute.Operation{
 				Status: computeOperationStatusRunning,
 			},
+			noErr: false,
 		},
 		{
 			op: &compute.Operation{
 				Status: computeOperationStatusDone,
 				Error:  &compute.OperationError{},
 			},
+			noErr: false,
 		},
-	}
-	for i, tt := range tests {
-		err := checkOperation(context.Background(), tt.op)
-		if err == nil {
-			t.Errorf("%d: failed.", i+1)
-		}
-	}
-
-	tests = []test{
 		{
 			op: &compute.Operation{
 				Status: computeOperationStatusDone,
 			},
+			noErr: true,
 		},
 	}
 	for i, tt := range tests {
-		err := checkOperation(context.Background(), tt.op)
-		if err != nil {
+		err := checkOperation(tt.op)
+		if (err == nil && !tt.noErr) || (err != nil && tt.noErr) {
 			t.Errorf("%d: failed.", i+1)
 		}
 	}

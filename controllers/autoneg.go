@@ -17,10 +17,10 @@ limitations under the License.
 package controllers
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/cenkalti/backoff"
 	"google.golang.org/api/compute/v1"
@@ -35,6 +35,7 @@ const (
 	computeOperationStatusDone    = "DONE"
 	computeOperationStatusRunning = "RUNNING"
 	computeOperationStatusPending = "PENDING"
+	maxElapsedTime                = 15 * time.Minute
 )
 
 var (
@@ -76,26 +77,27 @@ func (b *BackendController) updateBackends(name string, svc *compute.BackendServ
 	if len(svc.Backends) == 0 {
 		svc.NullFields = []string{"Backends"}
 	}
-	// Perform optimistic locking to ensure we patch the intended object version
+	// Perform locking to ensure we patch the intended object version
 	p := compute.NewBackendServicesService(b.s).Patch(b.project, name, svc)
 	p.Header().Set("If-match", svc.Header.Get("ETag"))
 	res, err := p.Do()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	bo := backoff.NewExponentialBackOff()
+	bo.MaxElapsedTime = maxElapsedTime
 	err = backoff.Retry(
 		func() error {
 			op, err := compute.NewGlobalOperationsService(b.s).Get(b.project, res.Name).Do()
 			if err != nil {
 				return err
 			}
-			return checkOperation(ctx, op)
-		}, backoff.WithContext(backoff.NewExponentialBackOff(), ctx))
+			return checkOperation(op)
+		}, bo)
 	return err
 }
 
-func checkOperation(ctx context.Context, op *compute.Operation) error {
+func checkOperation(op *compute.Operation) error {
 	switch op.Status {
 	case computeOperationStatusPending:
 		return errors.New("operation pending")
@@ -103,10 +105,7 @@ func checkOperation(ctx context.Context, op *compute.Operation) error {
 		return errors.New("operation running")
 	case computeOperationStatusDone:
 		if op.Error != nil {
-			// wrap with cancellable context
-			_, cancel := context.WithCancel(ctx)
-			// patch operation failed, cancel context and return error
-			cancel()
+			// patch operation failed
 			return fmt.Errorf("operation %d failed", op.Id)
 		}
 		return nil
