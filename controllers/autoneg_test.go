@@ -265,35 +265,35 @@ func Test_checkOperation(t *testing.T) {
 
 	tests := []test{
 		{
+			noErr: false,
 			op: &compute.Operation{
 				Status: "invalid",
 			},
-			noErr: false,
 		},
 		{
+			noErr: false,
 			op: &compute.Operation{
 				Status: computeOperationStatusPending,
 			},
-			noErr: false,
 		},
 		{
+			noErr: false,
 			op: &compute.Operation{
 				Status: computeOperationStatusRunning,
 			},
-			noErr: false,
 		},
 		{
+			noErr: false,
 			op: &compute.Operation{
 				Status: computeOperationStatusDone,
 				Error:  &compute.OperationError{},
 			},
-			noErr: false,
 		},
 		{
+			noErr: true,
 			op: &compute.Operation{
 				Status: computeOperationStatusDone,
 			},
-			noErr: true,
 		},
 	}
 	for i, tt := range tests {
