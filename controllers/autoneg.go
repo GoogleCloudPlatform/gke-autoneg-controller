@@ -35,7 +35,7 @@ const (
 	computeOperationStatusDone    = "DONE"
 	computeOperationStatusRunning = "RUNNING"
 	computeOperationStatusPending = "PENDING"
-	maxElapsedTime                = 15 * time.Minute
+	maxElapsedTime                = 4 * time.Minute
 )
 
 var (
