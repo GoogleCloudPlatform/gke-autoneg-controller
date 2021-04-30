@@ -256,3 +256,50 @@ func TestReconcileStatuses(t *testing.T) {
 		}
 	}
 }
+
+func Test_checkOperation(t *testing.T) {
+	type test struct {
+		noErr bool
+		op    *compute.Operation
+	}
+
+	tests := []test{
+		{
+			noErr: false,
+			op: &compute.Operation{
+				Status: "invalid",
+			},
+		},
+		{
+			noErr: false,
+			op: &compute.Operation{
+				Status: computeOperationStatusPending,
+			},
+		},
+		{
+			noErr: false,
+			op: &compute.Operation{
+				Status: computeOperationStatusRunning,
+			},
+		},
+		{
+			noErr: false,
+			op: &compute.Operation{
+				Status: computeOperationStatusDone,
+				Error:  &compute.OperationError{},
+			},
+		},
+		{
+			noErr: true,
+			op: &compute.Operation{
+				Status: computeOperationStatusDone,
+			},
+		},
+	}
+	for i, tt := range tests {
+		err := checkOperation(tt.op)
+		if (err == nil && !tt.noErr) || (err != nil && tt.noErr) {
+			t.Errorf("%d: failed.", i+1)
+		}
+	}
+}

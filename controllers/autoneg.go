@@ -20,16 +20,22 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
+	"github.com/cenkalti/backoff"
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/googleapi"
 )
 
 const (
-	autonegAnnotation       = "anthos.cft.dev/autoneg"
-	autonegStatusAnnotation = "anthos.cft.dev/autoneg-status"
-	negStatusAnnotation     = "cloud.google.com/neg-status"
-	autonegFinalizer        = "anthos.cft.dev/autoneg"
+	autonegAnnotation             = "anthos.cft.dev/autoneg"
+	autonegStatusAnnotation       = "anthos.cft.dev/autoneg-status"
+	negStatusAnnotation           = "cloud.google.com/neg-status"
+	autonegFinalizer              = "anthos.cft.dev/autoneg"
+	computeOperationStatusDone    = "DONE"
+	computeOperationStatusRunning = "RUNNING"
+	computeOperationStatusPending = "PENDING"
+	maxElapsedTime                = 4 * time.Minute
 )
 
 var (
@@ -71,11 +77,40 @@ func (b *BackendController) updateBackends(name string, svc *compute.BackendServ
 	if len(svc.Backends) == 0 {
 		svc.NullFields = []string{"Backends"}
 	}
-	// Perform optimistic locking to ensure we patch the intended object version
+	// Perform locking to ensure we patch the intended object version
 	p := compute.NewBackendServicesService(b.s).Patch(b.project, name, svc)
 	p.Header().Set("If-match", svc.Header.Get("ETag"))
-	_, err := p.Do()
+	res, err := p.Do()
+	if err != nil {
+		return err
+	}
+	bo := backoff.NewExponentialBackOff()
+	bo.MaxElapsedTime = maxElapsedTime
+	err = backoff.Retry(
+		func() error {
+			op, err := compute.NewGlobalOperationsService(b.s).Get(b.project, res.Name).Do()
+			if err != nil {
+				return err
+			}
+			return checkOperation(op)
+		}, bo)
 	return err
+}
+
+func checkOperation(op *compute.Operation) error {
+	switch op.Status {
+	case computeOperationStatusPending:
+		return errors.New("operation pending")
+	case computeOperationStatusRunning:
+		return errors.New("operation running")
+	case computeOperationStatusDone:
+		if op.Error != nil {
+			// patch operation failed
+			return fmt.Errorf("operation %d failed", op.Id)
+		}
+		return nil
+	}
+	return fmt.Errorf("unknown operation state: %s", op.Status)
 }
 
 // ReconcileBackends takes the actual and intended AutonegStatus
