@@ -20,6 +20,8 @@ import (
 	"context"
 	"encoding/json"
 	"reflect"
+	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -122,7 +124,8 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	if err = r.Update(ctx, svc); err != nil {
 		r.Recorder.Event(svc, "Warning", "BackendError", err.Error())
-		return reconcile.Result{}, err
+		requeue := strings.Contains(err.Error(), "please apply your changes to the latest version and try again")
+		return reconcile.Result{Requeue: requeue, RequeueAfter: 10 * time.Second}, err
 	}
 
 	if deleting {
