@@ -50,8 +50,12 @@ vet:
 generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths="./..."
 
+# Create api directory. Circumvents issue with kubebuilder without CRDs
+api:
+	mkdir api
+
 # Build the docker image
-docker-build: test
+docker-build: test api
 	docker build . -t ${IMG}
 
 # Push the docker image
