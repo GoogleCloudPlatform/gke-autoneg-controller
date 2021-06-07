@@ -23,8 +23,8 @@ namespace: autoneg-system
 namePrefix: autoneg-
 
 # Labels to add to all resources and selectors.
-#commonLabels:
-#  someName: someValue
+commonLabels:
+  app: autoneg
 
 bases:
 # - ../crd
