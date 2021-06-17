@@ -71,3 +71,23 @@ CONTROLLER_GEN=$(GOBIN)/controller-gen
 else
 CONTROLLER_GEN=$(shell which controller-gen)
 endif
+
+# Used for autoneg project releases
+#
+
+# Release image
+VERSION ?= latest
+RELEASE_IMG ?= docker.pkg.github.com/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller
+
+# Make deployment manifests but do not deploy
+autoneg-manifests: manifests
+	cd config/manager && kustomize edit set image controller=${RELEASE_IMG}:${VERSION}
+	kustomize build config/default > deploy/autoneg.yaml
+
+# Make release image
+release-image: docker-build
+	docker tag ${IMG} ${RELEASE_IMG}:${VERSION}
+
+# Push release image
+release-push: release-image
+	docker push ${RELEASE_IMG}:${VERSION}

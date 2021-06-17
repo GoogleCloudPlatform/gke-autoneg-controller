@@ -16,12 +16,15 @@ apiVersion: v1
 kind: Namespace
 metadata:
   labels:
+    app: autoneg
     control-plane: controller-manager
   name: autoneg-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
+  labels:
+    app: autoneg
   name: autoneg-leader-election-role
   namespace: autoneg-system
 rules:
@@ -56,28 +59,10 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   creationTimestamp: null
+  labels:
+    app: autoneg
   name: autoneg-manager-role
 rules:
-- apiGroups:
-  - ""
-  resources:
-  - services
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - ""
-  resources:
-  - services/status
-  verbs:
-  - get
-  - update
-  - patch
 - apiGroups:
   - ""
   resources:
@@ -85,10 +70,30 @@ rules:
   verbs:
   - create
   - patch
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - services/status
+  verbs:
+  - get
+  - patch
+  - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
+  labels:
+    app: autoneg
   name: autoneg-proxy-role
 rules:
 - apiGroups:
@@ -107,6 +112,8 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
+  labels:
+    app: autoneg
   name: autoneg-leader-election-rolebinding
   namespace: autoneg-system
 roleRef:
@@ -121,6 +128,8 @@ subjects:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
+  labels:
+    app: autoneg
   name: autoneg-manager-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -134,6 +143,8 @@ subjects:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
+  labels:
+    app: autoneg
   name: autoneg-proxy-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -152,6 +163,7 @@ metadata:
     prometheus.io/scheme: https
     prometheus.io/scrape: "true"
   labels:
+    app: autoneg
     control-plane: controller-manager
   name: autoneg-controller-manager-metrics-service
   namespace: autoneg-system
@@ -161,12 +173,14 @@ spec:
     port: 8443
     targetPort: https
   selector:
+    app: autoneg
     control-plane: controller-manager
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
+    app: autoneg
     control-plane: controller-manager
   name: autoneg-controller-manager
   namespace: autoneg-system
@@ -174,13 +188,29 @@ spec:
   replicas: 1
   selector:
     matchLabels:
+      app: autoneg
       control-plane: controller-manager
   template:
     metadata:
       labels:
+        app: autoneg
         control-plane: controller-manager
     spec:
       containers:
+      - args:
+        - --metrics-addr=127.0.0.1:8080
+        - --enable-leader-election
+        command:
+        - /manager
+        image: docker.pkg.github.com/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:0.9.1
+        name: manager
+        resources:
+          limits:
+            cpu: 100m
+            memory: 30Mi
+          requests:
+            cpu: 100m
+            memory: 20Mi
       - args:
         - --secure-listen-address=0.0.0.0:8443
         - --upstream=http://127.0.0.1:8080/
@@ -191,18 +221,4 @@ spec:
         ports:
         - containerPort: 8443
           name: https
-      - args:
-        - --metrics-addr=127.0.0.1:8080
-        - --enable-leader-election
-        command:
-        - /manager
-        image: gcr.io/soell-labs/gke-autoneg-controller:latest
-        name: manager
-        resources:
-          limits:
-            cpu: 100m
-            memory: 30Mi
-          requests:
-            cpu: 100m
-            memory: 20Mi
       terminationGracePeriodSeconds: 10
