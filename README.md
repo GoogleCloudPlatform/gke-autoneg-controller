@@ -23,7 +23,7 @@ In your GKE service, two annotations are required in your service definition:
 metadata:
   annotations:
     cloud.google.com/neg: '{"exposed_ports": {"80":{}}}'
-    anthos.cft.dev/autoneg: '{"name":"autoneg_test", "max_rate_per_endpoint":1000}'
+    anthos.cft.dev/autoneg: '{"name":"autoneg-test", "max_rate_per_endpoint":1000}'
 ```
 
 `autoneg` will detect the NEGs that are created by the GKE NEG controller, and register them with the backend service specified in the `autoneg` configuration annotation.
@@ -51,7 +51,15 @@ First, set up the GCP resources necessary to support [Workload Identity](https:/
 ```
 PROJECT_ID=myproject deploy/workload_identity.sh
 ```
-Then, on each cluster in your project where you'd like to install `autoneg`, run these two commands:
+If you are using Shared VPC, ensure that the `autoneg` service account has the `compute.networkUser` role in the Shared VPC host project:
+```
+gcloud projects add-iam-policy-binding \
+  --role roles/compute.networkUser \
+  --member "serviceAccount:autoneg-system@${PROJECT_ID}.iam.gserviceaccount.com" \
+  ${HOST_PROJECT_ID}
+```
+
+Lastly, on each cluster in your project where you'd like to install `autoneg`, run these two commands:
 ```
 kubectl apply -f deploy/autoneg.yaml
 
