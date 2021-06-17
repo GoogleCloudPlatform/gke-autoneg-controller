@@ -35,5 +35,6 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager 
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
 FROM gcr.io/distroless/static:latest
 WORKDIR /
-COPY --from=builder /workspace/manager .
+COPY --chown=nonroot:nonroot --from=builder /workspace/manager .
+USER nonroot
 ENTRYPOINT ["/manager"]
