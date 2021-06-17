@@ -51,7 +51,7 @@ First, set up the GCP resources necessary to support [Workload Identity](https:/
 ```
 PROJECT_ID=myproject deploy/workload_identity.sh
 ```
-If you are using Shared VPC, ensure that the `autoneg` service account has the `compute.networkUser` role in the Shared VPC host project:
+If you are using Shared VPC, ensure that the `autoneg-system` service account has the `compute.networkUser` role in the Shared VPC host project:
 ```
 gcloud projects add-iam-policy-binding \
   --role roles/compute.networkUser \
