@@ -34,7 +34,7 @@ import (
 	// +kubebuilder:scaffold:imports
 )
 
-const useragent = "google-pso-tool/gke-autoneg-controller/0.9.1"
+const useragent = "google-pso-tool/gke-autoneg-controller/0.9.2-dev"
 
 var (
 	scheme   = runtime.NewScheme()
