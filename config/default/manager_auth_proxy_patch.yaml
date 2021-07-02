@@ -24,7 +24,7 @@ spec:
     spec:
       containers:
       - name: kube-rbac-proxy
-        image: gcr.io/kubebuilder/kube-rbac-proxy:v0.4.0
+        image: gcr.io/kubebuilder/kube-rbac-proxy:v0.8.0
         args:
         - "--secure-listen-address=0.0.0.0:8443"
         - "--upstream=http://127.0.0.1:8080/"
@@ -33,6 +33,9 @@ spec:
         ports:
         - containerPort: 8443
           name: https
+        securityContext:
+          privileged: false
+          allowPrivilegeEscalation: false
       - name: manager
         args:
         - "--metrics-addr=127.0.0.1:8080"
