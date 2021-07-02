@@ -17,13 +17,13 @@ On deleting the GKE service, `autoneg` will deregister NEGs from the specified b
 In your GKE service, two annotations are required in your service definition:
 
 * `cloud.google.com/neg` enables the GKE NEG controller; specify as [standalone NEGs](https://cloud.google.com/kubernetes-engine/docs/how-to/standalone-neg)
-* `anthos.cft.dev/autoneg` specifies name and other configuration
-
+* `controller.autoneg.dev/neg` specifies name and other configuration
+   * Previous version used `anthos.cft.dev/autoneg` as annotation and it's still supported, but deprecated and will be removed in subsequent releases.
 ```yaml
 metadata:
   annotations:
-    cloud.google.com/neg: '{"exposed_ports": {"80":{}}}'
-    anthos.cft.dev/autoneg: '{"name":"autoneg-test", "max_rate_per_endpoint":1000}'
+    cloud.google.com/neg: '{"exposed_ports": {"80":{},"443":{}}}'
+    controller.autoneg.dev/neg: '{"backend_services":{"80":{"name":"http-be","max_rate_per_endpoint":100},"443":{"name":"https-be","max_connections_per_endpoint":1000}}}
 ```
 
 `autoneg` will detect the NEGs that are created by the GKE NEG controller, and register them with the backend service specified in the `autoneg` configuration annotation.

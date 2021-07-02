@@ -1,5 +1,5 @@
 /*
-Copyright 2019 Google LLC.
+Copyright 2019-2021 Google LLC.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -84,7 +84,7 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	intendedStatus := AutonegStatus{
-		AutonegConfig: status.anConfig,
+		AutonegConfig: status.nanConfig,
 		NEGStatus:     status.negStatus,
 	}
 
@@ -92,7 +92,7 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		intendedStatus.NEGStatus = NEGStatus{}
 	}
 
-	if reflect.DeepEqual(status.anStatus, intendedStatus) {
+	if reflect.DeepEqual(status.nanStatus, intendedStatus) {
 		// Equal, no reconciliation necessary
 		return reconcile.Result{}, nil
 	}
@@ -100,7 +100,7 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// Reconcile differences
 	logger.Info("Applying intended status", "status", intendedStatus)
 
-	if err = r.ReconcileBackends(status.anStatus, intendedStatus); err != nil {
+	if err = r.ReconcileBackends(status.nanStatus, intendedStatus); err != nil {
 		if !(deleting && err == errNotFound) {
 			r.Recorder.Event(svc, "Warning", "BackendError", err.Error())
 			return reconcile.Result{}, err
@@ -126,16 +126,21 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return reconcile.Result{}, err
 	}
 
-	if deleting {
-		r.Recorder.Eventf(svc, "Normal", "Delete",
-			"Deregistered NEGs for %q from backend service %q",
-			req.NamespacedName,
-			intendedStatus.Name)
-	} else {
-		r.Recorder.Eventf(svc, "Normal", "Sync",
-			"Synced NEGs for %q as backends to backend service %q",
-			req.NamespacedName,
-			intendedStatus.Name)
+	for port, endpointGroup := range intendedStatus.BackendServices {
+		if deleting {
+			r.Recorder.Eventf(svc, "Normal", "Delete",
+				"Deregistered NEGs for %q from backend service %q (port %s)",
+				req.NamespacedName,
+				endpointGroup.Name,
+				port)
+
+		} else {
+			r.Recorder.Eventf(svc, "Normal", "Sync",
+				"Synced NEGs for %q as backends to backend service %q (port %s)",
+				req.NamespacedName,
+				endpointGroup.Name,
+				port)
+		}
 	}
 
 	return reconcile.Result{}, nil
