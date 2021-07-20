@@ -1,4 +1,4 @@
-# Copyright 2019 Google LLC
+# Copyright 2019-2021 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # Build the manager binary
-FROM golang:1.12.5 as builder
+FROM golang:1.16.5 as builder
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
@@ -25,7 +25,6 @@ RUN go mod download
 
 # Copy the go source
 COPY main.go main.go
-COPY api/ api/
 COPY controllers/ controllers/
 
 # Build

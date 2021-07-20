@@ -1,0 +1,49 @@
+name: |
+  Build, test, push
+
+on:
+  push:
+    branches: 
+    - master
+  pull_request: 
+    
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.16
+
+    - name: Get version number
+      run: |
+        VERSION=$(grep 'const useragent' main.go | sed 's/.*\/\(.*\)"/\1/g')
+        if [ "$GITHUB_REF" != "refs/heads/master" ] ; then
+          PR_NUMBER=$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }')
+          VERSION="${VERSION}-pr${PR_NUMBER}"
+        fi
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+    - name: Test
+      run: |
+        sudo mkdir -p /usr/local/kubebuilder
+        curl -Ls https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.3.2/kubebuilder_2.3.2_linux_amd64.tar.gz | sudo tar -xvz --strip-components=1 -C /usr/local/kubebuilder -f - 
+        make test
+
+    - name: Build image
+      run: |
+        make docker-build
+        
+    - name: Release image
+      run: |
+        make release-image
+      env:
+        RELEASE_IMAGE: ghcr.io/$GITHUB_REPOSITORY/gke-autoneg-controller/gke-autoneg-controller
