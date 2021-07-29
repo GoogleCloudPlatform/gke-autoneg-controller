@@ -40,4 +40,5 @@ jobs:
 
     - name: Build and release image
       run: |
-        RELEASE_IMG=ghcr.io/${GITHUB_REPOSITORY}/gke-autoneg-controller/gke-autoneg-controller make release-push
+        export RELEASE_IMG=$(echo ghcr.io/${GITHUB_REPOSITORY}/gke-autoneg-controller/gke-autoneg-controller | tr '[:upper:]' '[:lower:]')
+        make release-push
