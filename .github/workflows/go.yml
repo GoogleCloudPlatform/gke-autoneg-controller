@@ -39,10 +39,12 @@ jobs:
         make test
 
     - name: Login to GitHub Container Registry
+      if: ${{ github.event_name != 'pull_request' }}
       run: |
         docker login ghcr.io -u token --password-stdin <<< ${{ github.token }}
-        
+
     - name: Build and release image
+      if: ${{ github.event_name != 'pull_request' }}
       run: |
         export RELEASE_IMG=$(echo ghcr.io/${GITHUB_REPOSITORY}/gke-autoneg-controller | tr '[:upper:]' '[:lower:]')
         export LABELS="--label org.opencontainers.image.licenses='Apache-2.0' --label org.opencontainers.image.revision='$BUILD_REVISION' --label org.opencontainers.image.source='${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}' --label org.opencontainers.image.title='${GITHUB_REPOSITORY#*/}' --label org.opencontainers.image.vendor='Google LLC' --label org.opencontainers.image.version='$VERSION'"
