@@ -39,12 +39,9 @@ jobs:
         make test
 
     - name: Login to GitHub Container Registry
-      uses: docker/login-action@v1
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-
+      run: |
+        docker login ghcr.io -u token --password-stdin <<< ${{ github.token }}
+        
     - name: Build and release image
       run: |
         export RELEASE_IMG=$(echo ghcr.io/${GITHUB_REPOSITORY}/gke-autoneg-controller | tr '[:upper:]' '[:lower:]')
