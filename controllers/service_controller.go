@@ -69,13 +69,6 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return reconcile.Result{}, err
 	}
 
-	// Add the finalizer if necessary
-	if !containsString(svc.ObjectMeta.Finalizers, autonegFinalizer) {
-		logger.Info("Adding finalizer")
-		svc.ObjectMeta.Finalizers = append(svc.ObjectMeta.Finalizers, autonegFinalizer)
-		return reconcile.Result{}, r.Update(ctx, svc)
-	}
-
 	deleting := false
 	// Process deletion
 	if !svc.ObjectMeta.DeletionTimestamp.IsZero() && containsString(svc.ObjectMeta.Finalizers, autonegFinalizer) {
@@ -107,11 +100,18 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 	}
 
+	// Write changes to the service object.
 	if deleting {
 		// Remove finalizer and clear status
 		svc.ObjectMeta.Finalizers = removeString(svc.ObjectMeta.Finalizers, autonegFinalizer)
 		delete(svc.ObjectMeta.Annotations, autonegStatusAnnotation)
 	} else {
+		// Add the finalizer annotation if it doesn't exist.
+		if !containsString(svc.ObjectMeta.Finalizers, autonegFinalizer) {
+			logger.Info("Adding finalizer")
+			svc.ObjectMeta.Finalizers = append(svc.ObjectMeta.Finalizers, autonegFinalizer)
+		}
+
 		// Write status to annotations
 		anStatus, err := json.Marshal(intendedStatus)
 		if err != nil {
@@ -122,7 +122,10 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	if err = r.Update(ctx, svc); err != nil {
-		r.Recorder.Event(svc, "Warning", "BackendError", err.Error())
+		// Do not record an event in case of routine object conflict.
+		if !errors.IsConflict(err) {
+			r.Recorder.Event(svc, "Warning", "BackendError", err.Error())
+		}
 		return reconcile.Result{}, err
 	}
 
