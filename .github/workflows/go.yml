@@ -40,6 +40,4 @@ jobs:
 
     - name: Build and release image
       run: |
-        make release-push
-      env:
-        RELEASE_IMG: ghcr.io/$GITHUB_REPOSITORY/gke-autoneg-controller/gke-autoneg-controller
+        RELEASE_IMG=ghcr.io/${GITHUB_REPOSITORY}/gke-autoneg-controller/gke-autoneg-controller make release-push
