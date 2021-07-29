@@ -202,7 +202,7 @@ spec:
         - --enable-leader-election
         command:
         - /manager
-        image: docker.pkg.github.com/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:0.9.1
+        image: ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:0.9.2-dev
         name: manager
         resources:
           limits:

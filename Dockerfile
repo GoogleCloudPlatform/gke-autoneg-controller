@@ -35,5 +35,6 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager 
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /
 COPY --chown=nonroot:nonroot --from=builder /workspace/manager .
-USER nonroot
+# user nonroot has uid 65532
+USER 65532
 ENTRYPOINT ["/manager"]
