@@ -55,8 +55,12 @@ api:
 	mkdir api
 
 # Build the docker image
+VERSION ?= latest
+LABELS ?= --label org.opencontainers.image.licenses="Apache-2.0" \
+    --label org.opencontainers.image.vendor="Google LLC" \
+    --label org.opencontainers.image.version="$VERSION"
 docker-build: test api
-	docker build . -t ${IMG}
+	docker build ${LABELS} . -t ${IMG}
 
 # Push the docker image
 docker-push:
@@ -76,7 +80,6 @@ endif
 #
 
 # Release image
-VERSION ?= latest
 RELEASE_IMG ?= docker.pkg.github.com/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller
 
 # Make deployment manifests but do not deploy

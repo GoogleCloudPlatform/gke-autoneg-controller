@@ -38,7 +38,15 @@ jobs:
         curl -Ls https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.3.2/kubebuilder_2.3.2_linux_amd64.tar.gz | sudo tar -xvz --strip-components=1 -C /usr/local/kubebuilder -f - 
         make test
 
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
     - name: Build and release image
       run: |
         export RELEASE_IMG=$(echo ghcr.io/${GITHUB_REPOSITORY}/gke-autoneg-controller/gke-autoneg-controller | tr '[:upper:]' '[:lower:]')
+        export LABELS="--label org.opencontainers.image.licenses='Apache-2.0' --label org.opencontainers.image.revision='$BUILD_REVISION' --label org.opencontainers.image.source='${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}' --label org.opencontainers.image.title='${GITHUB_REPOSITORY#*/}' --label org.opencontainers.image.vendor='Google LLC' --label org.opencontainers.image.version='$VERSION'"
         make release-push
