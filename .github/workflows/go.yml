@@ -38,12 +38,8 @@ jobs:
         curl -Ls https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.3.2/kubebuilder_2.3.2_linux_amd64.tar.gz | sudo tar -xvz --strip-components=1 -C /usr/local/kubebuilder -f - 
         make test
 
-    - name: Build image
+    - name: Build and release image
       run: |
-        make docker-build
-        
-    - name: Release image
-      run: |
-        make release-image
+        make release-push
       env:
         RELEASE_IMAGE: ghcr.io/$GITHUB_REPOSITORY/gke-autoneg-controller/gke-autoneg-controller
