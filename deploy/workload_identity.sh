@@ -20,7 +20,7 @@ gcloud iam service-accounts add-iam-policy-binding \
   autoneg-system@${PROJECT_ID}.iam.gserviceaccount.com
 
 gcloud iam roles create autoneg --project ${PROJECT_ID} \
-  --permissions=compute.backendServices.get,compute.backendServices.update,compute.networkEndpointGroups.use,compute.healthChecks.useReadOnly
+  --permissions=compute.backendServices.get,compute.backendServices.update,compute.regionBackendServices.get,compute.regionBackendServices.update,compute.networkEndpointGroups.use,compute.healthChecks.useReadOnly,compute.regionHealthChecks.useReadOnly
 gcloud projects add-iam-policy-binding \
   --role projects/${PROJECT_ID}/roles/autoneg \
   --member "serviceAccount:autoneg-system@${PROJECT_ID}.iam.gserviceaccount.com" \
