@@ -80,7 +80,7 @@ endif
 #
 
 # Release image
-RELEASE_IMG ?= docker.pkg.github.com/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller
+RELEASE_IMG ?= ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller
 
 # Make deployment manifests but do not deploy
 autoneg-manifests: manifests
