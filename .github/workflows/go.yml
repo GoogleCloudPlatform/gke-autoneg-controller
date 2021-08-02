@@ -5,6 +5,7 @@ on:
   push:
     branches: 
     - master
+    tags:
   pull_request: 
     
 permissions:
@@ -25,12 +26,11 @@ jobs:
 
     - name: Get version number
       run: |
-        VERSION=$(grep 'const useragent' main.go | sed 's/.*\/\(.*\)"/\1/g')
-        if [ "$GITHUB_REF" != "refs/heads/master" ] ; then
-          PR_NUMBER=$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }')
-          VERSION="${VERSION}-pr${PR_NUMBER}"
+        if [[ "$GITHUB_REF" == "refs/tags/"* ]]; then
+          echo "VERSION=${GITHUB_REF##*/}" >> $GITHUB_ENV
+        else
+          echo "VERSION=latest" >> $GITHUB_ENV
         fi
-        echo "VERSION=$VERSION" >> $GITHUB_ENV
 
     - name: Test
       run: |
