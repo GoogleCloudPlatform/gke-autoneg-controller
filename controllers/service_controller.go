@@ -1,5 +1,5 @@
 /*
-Copyright 2019 Google LLC.
+Copyright 2019-2021 Google LLC.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"reflect"
 
 	"github.com/go-logr/logr"
@@ -27,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
 )
 
@@ -50,7 +51,7 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	svc := &corev1.Service{}
 	err := r.Get(ctx, req.NamespacedName, svc)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			// Object not found, return.
 			return reconcile.Result{}, nil
 		}
@@ -77,15 +78,20 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	intendedStatus := AutonegStatus{
-		AutonegConfig: status.anConfig,
+		AutonegConfig: status.config,
 		NEGStatus:     status.negStatus,
+	}
+
+	oldIntendedStatus := OldAutonegStatus{
+		OldAutonegConfig: status.oldConfig,
+		NEGStatus:        status.negStatus,
 	}
 
 	if deleting {
 		intendedStatus.NEGStatus = NEGStatus{}
 	}
 
-	if reflect.DeepEqual(status.anStatus, intendedStatus) {
+	if reflect.DeepEqual(status.status, intendedStatus) {
 		// Equal, no reconciliation necessary
 		return reconcile.Result{}, nil
 	}
@@ -93,8 +99,9 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// Reconcile differences
 	logger.Info("Applying intended status", "status", intendedStatus)
 
-	if err = r.ReconcileBackends(status.anStatus, intendedStatus); err != nil {
-		if !(deleting && err == errNotFound) {
+	if err = r.ReconcileBackends(status.status, intendedStatus); err != nil {
+		var e *errNotFound
+		if !(deleting && errors.As(err, &e)) {
 			r.Recorder.Event(svc, "Warning", "BackendError", err.Error())
 			return reconcile.Result{}, err
 		}
@@ -119,26 +126,44 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			return reconcile.Result{}, err
 		}
 		svc.ObjectMeta.Annotations[autonegStatusAnnotation] = string(anStatus)
+
+		if !status.newConfig {
+			oldStatus, err := json.Marshal(oldIntendedStatus)
+
+			if err != nil {
+				logger.Error(err, "json marshal error")
+				return reconcile.Result{}, err
+			}
+
+			svc.ObjectMeta.Annotations[oldAutonegStatusAnnotation] = string(oldStatus)
+		}
 	}
 
 	if err = r.Update(ctx, svc); err != nil {
 		// Do not record an event in case of routine object conflict.
-		if !errors.IsConflict(err) {
+		if !apierrors.IsConflict(err) {
 			r.Recorder.Event(svc, "Warning", "BackendError", err.Error())
 		}
 		return reconcile.Result{}, err
 	}
 
-	if deleting {
-		r.Recorder.Eventf(svc, "Normal", "Delete",
-			"Deregistered NEGs for %q from backend service %q",
-			req.NamespacedName,
-			intendedStatus.Name)
-	} else {
-		r.Recorder.Eventf(svc, "Normal", "Sync",
-			"Synced NEGs for %q as backends to backend service %q",
-			req.NamespacedName,
-			intendedStatus.Name)
+	for port, endpointGroups := range intendedStatus.BackendServices {
+		for _, endpointGroup := range endpointGroups {
+			if deleting {
+				r.Recorder.Eventf(svc, "Normal", "Delete",
+					"Deregistered NEGs for %q from backend service %q (port %s)",
+					req.NamespacedName,
+					endpointGroup.Name,
+					port)
+
+			} else {
+				r.Recorder.Eventf(svc, "Normal", "Sync",
+					"Synced NEGs for %q as backends to backend service %q (port %s)",
+					req.NamespacedName,
+					endpointGroup.Name,
+					port)
+			}
+		}
 	}
 
 	return reconcile.Result{}, nil

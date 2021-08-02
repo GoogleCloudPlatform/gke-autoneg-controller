@@ -1,8 +1,8 @@
 # Autoneg GKE controller
 
-`autoneg` provides simple custom integration between GKE and GCLB. `autoneg` is a GKE controller which works in conjunction with the GKE NEG controller to manage integration between your GKE service endpoints and GCLB backend services.
+`autoneg` provides simple custom integration between GKE and GCLB (both external and internal).  `autoneg` is a GKE controller which works in conjunction with the GKE NEG controller to manage integration between your GKE service endpoints and GCLB backend services.
 
-GKE users may wish to register NEG backends from multiple clusters into the same backend service, or may wish to orchestrate advanced deployment strategies in a custom fashion. `autoneg` can enable those use cases.
+GKE users may wish to register NEG backends from multiple clusters into the same backend service, or may wish to orchestrate advanced deployment strategies in a custom fashion, or offer the same service via protected public endpoint and more lax internal endpoint. `autoneg` can enable those use cases.
 
 ## How it works
 
@@ -17,13 +17,15 @@ On deleting the GKE service, `autoneg` will deregister NEGs from the specified b
 In your GKE service, two annotations are required in your service definition:
 
 * `cloud.google.com/neg` enables the GKE NEG controller; specify as [standalone NEGs](https://cloud.google.com/kubernetes-engine/docs/how-to/standalone-neg)
-* `anthos.cft.dev/autoneg` specifies name and other configuration
-
+* `controller.autoneg.dev/neg` specifies name and other configuration
+   * Previous version used `anthos.cft.dev/autoneg` as annotation and it's still supported, but deprecated and will be removed in subsequent releases.
 ```yaml
 metadata:
   annotations:
-    cloud.google.com/neg: '{"exposed_ports": {"80":{}}}'
-    anthos.cft.dev/autoneg: '{"name":"autoneg-test", "max_rate_per_endpoint":1000}'
+    cloud.google.com/neg: '{"exposed_ports": {"80":{},"443":{}}}'
+    controller.autoneg.dev/neg: '{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":100}],"443":[{"name":"https-be","max_connections_per_endpoint":1000}]}}
+    # For L7 ILB (regional) backends 
+    # controller.autoneg.dev/neg: '{"backend_services":{"80":[{"name":"http-be","region":"europe-west4","max_rate_per_endpoint":100}],"443":[{"name":"https-be","region":"europe-west4","max_connections_per_endpoint":1000}]}}
 ```
 
 `autoneg` will detect the NEGs that are created by the GKE NEG controller, and register them with the backend service specified in the `autoneg` configuration annotation.
@@ -39,7 +41,9 @@ Specify options to configure the backends representing the NEGs that will be ass
 ### Options
 
 * `name`: optional. The name of the backend service to register backends with. Defaults to GKE service name.
-* `max_rate_per_endpoint`: required. Integer representing the maximum rate a pod can handle.
+* `region`: optional. Used to specify that this is a regional backend service.
+* `max_rate_per_endpoint`: required/optional. Integer representing the maximum rate a pod can handle. Pick either rate or connection.
+* `max_connections_per_endpoint`: required/optional. Integer representing the maximum amount of connections a pod can handle. Pick either rate or connection.
 
 ## IAM considerations
 
@@ -69,6 +73,7 @@ kubectl annotate sa -n autoneg-system default \
 This will create all the Kubernetes resources required to support `autoneg` and annotate the default service account in the `autoneg-system` namespace to associate a GCP service account using [Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity). 
 
 ### Customizing your installation
+
 `autoneg` is based on [Kubebuilder](https://kubebuilder.io), and as such, you can customize and deploy `autoneg` according to the Kubebuilder "Run It On the Cluster" section of the [Quick Start](https://kubebuilder.io/quick-start.html#run-it-on-the-cluster). `autoneg` does not define a CRD, so you can skip any Kubebuilder steps involving CRDs.
 
 The included `deploy/autoneg.yaml` is the default output of Kubebuilder's `make deploy` step, coupled with a public image.

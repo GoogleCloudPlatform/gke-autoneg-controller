@@ -1,5 +1,5 @@
 /*
-Copyright 2019 Google LLC.
+Copyright 2019-2021 Google LLC.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,11 +24,22 @@ import (
 )
 
 var (
-	malformedJSON  = `{`
-	validConfig    = `{"name":"test", "max_rate_per_endpoint":100}`
-	brokenConfig   = `{"name":"test", "max_rate_per_endpoint":"100"}`
-	validStatus    = `{}`
-	validNegConfig = `{}`
+	malformedJSON    = `{`
+	validConfig      = `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":100}],"443":[{"name":"https-be","max_connections_per_endpoint":1000}]}}`
+	brokenConfig     = `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":"100"}],"443":[{"name":"https-be","max_connections_per_endpoint":1000}}}`
+	validMultiConfig = `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":100},{"name":"http-ilb-be","max_rate_per_endpoint":100}],"443":[{"name":"https-be","max_connections_per_endpoint":1000},{"name":"https-ilb-be","max_connections_per_endpoint":1000}]}}`
+
+	validStatus        = `{}`
+	validAutonegConfig = `{}`
+	validAutonegStatus = `{}`
+	invalidStatus      = `{`
+	oldValidConfig     = `{"name":"test", "max_rate_per_endpoint":100}`
+	oldBrokenConfig    = `{"name":"test", "max_rate_per_endpoint":"100"}`
+
+	validNegConfig   = `{"exposed_ports": {"80":{"name":"test"}}}`
+	wrongNegConfig   = `{"exposed_ports": {}}`
+	tooManyNegConfig = `{"exposed_ports": {"80":{"name":"test"},"443":{"name":"tls"}}}`
+	brokenNegConfig  = `{"exposed_ports": {}`
 )
 
 var statusTests = []struct {
@@ -86,19 +97,100 @@ var statusTests = []struct {
 		false,
 	},
 	{
-		"valid autoneg with invalid neg config",
+		"valid autoneg with valid neg status",
 		map[string]string{
 			autonegAnnotation:   validConfig,
-			negStatusAnnotation: malformedJSON,
+			negStatusAnnotation: validStatus,
+		},
+		true,
+		false,
+	},
+}
+
+var oldStatusTests = []struct {
+	name        string
+	annotations map[string]string
+	valid       bool
+	err         bool
+}{
+	{
+		"(legacy) not using autoneg",
+		map[string]string{},
+		false,
+		false,
+	},
+	{
+		"(legacy) autoneg with malformed config",
+		map[string]string{
+			oldAutonegAnnotation: malformedJSON,
+			negAnnotation:        validNegConfig,
 		},
 		true,
 		true,
 	},
 	{
-		"valid autoneg with valid neg config",
+		"(legacy) autoneg with broken config",
 		map[string]string{
-			autonegAnnotation:   validConfig,
-			negStatusAnnotation: validNegConfig,
+			oldAutonegAnnotation: oldBrokenConfig,
+			negAnnotation:        validNegConfig,
+		},
+		true,
+		true,
+	},
+	{
+		"(legacy) valid autoneg",
+		map[string]string{
+			oldAutonegAnnotation: oldValidConfig,
+			negAnnotation:        validNegConfig,
+		},
+		true,
+		false,
+	},
+	{
+		"(legacy) valid autoneg with too many ports",
+		map[string]string{
+			oldAutonegAnnotation: oldValidConfig,
+			negAnnotation:        tooManyNegConfig,
+		},
+		true,
+		true,
+	},
+	{
+		"(legacy) valid autoneg with invalid status",
+		map[string]string{
+			oldAutonegAnnotation:       oldValidConfig,
+			oldAutonegStatusAnnotation: malformedJSON,
+			negAnnotation:              validNegConfig,
+		},
+		true,
+		true,
+	},
+	{
+		"(legacy) valid autoneg with valid status",
+		map[string]string{
+			oldAutonegAnnotation:       oldValidConfig,
+			oldAutonegStatusAnnotation: validStatus,
+			negAnnotation:              validNegConfig,
+		},
+		true,
+		false,
+	},
+	{
+		"(legacy) valid autoneg with invalid neg status",
+		map[string]string{
+			oldAutonegAnnotation: oldValidConfig,
+			negStatusAnnotation:  malformedJSON,
+			negAnnotation:        validNegConfig,
+		},
+		true,
+		true,
+	},
+	{
+		"(legacy) valid autoneg with valid neg status",
+		map[string]string{
+			oldAutonegAnnotation: oldValidConfig,
+			negStatusAnnotation:  validAutonegStatus,
+			negAnnotation:        validNegConfig,
 		},
 		true,
 		false,
@@ -123,21 +215,39 @@ func TestGetStatuses(t *testing.T) {
 	}
 }
 
+func TestGetOldStatuses(t *testing.T) {
+	for _, st := range oldStatusTests {
+		_, valid, err := getStatuses("test", st.annotations)
+		if err != nil && !st.err {
+			t.Errorf("Set %q: expected no error, got one: %v", st.name, err)
+		}
+		if err == nil && st.err {
+			t.Errorf("Set %q: expected error, got none", st.name)
+		}
+		if !valid && st.valid {
+			t.Errorf("Set %q: expected autoneg config, got none", st.name)
+		}
+		if valid && !st.valid {
+			t.Errorf("Set %q: expected no autoneg config, got one", st.name)
+		}
+	}
+}
+
 var configTests = []struct {
 	name   string
-	config AutonegConfig
+	config OldAutonegConfig
 	err    bool
 }{
 	{
 		"default config",
-		AutonegConfig{},
+		OldAutonegConfig{},
 		false,
 	},
 }
 
 func TestValidateConfig(t *testing.T) {
 	for _, ct := range configTests {
-		err := validateConfig(ct.config)
+		err := validateOldConfig(ct.config)
 		if err == nil && ct.err {
 			t.Errorf("Set %q: expected error, got none", ct.name)
 		}
@@ -151,6 +261,7 @@ func relevantCopy(a compute.Backend) compute.Backend {
 	b := compute.Backend{}
 	b.Group = a.Group
 	b.MaxRatePerEndpoint = a.MaxRatePerEndpoint
+	b.MaxConnectionsPerEndpoint = a.MaxConnectionsPerEndpoint
 	return b
 }
 
@@ -171,59 +282,166 @@ func (b Backends) isEqual(ob Backends) bool {
 
 var (
 	fakeNeg     = "neg_name"
+	fakeNeg2    = "neg_name2"
 	fakeProject = "project"
 	negStatus   = NEGStatus{
 		NEGs:  map[string]string{"80": fakeNeg},
 		Zones: []string{"zone1", "zone2"},
 	}
+	negStatusMulti = NEGStatus{
+		NEGs:  map[string]string{"80": fakeNeg, "443": fakeNeg2},
+		Zones: []string{"zone1", "zone2"},
+	}
+
+	// empty state
+	configEmpty   = AutonegConfig{}
+	statusEmpty   = AutonegStatus{AutonegConfig: configEmpty}
+	backendsEmpty = map[string]map[string]Backends{}
 
 	// initial state
 	statusInitial = AutonegStatus{AutonegConfig: configBasic}
-	backendsNone  = Backends{name: "test"}
+	backendsNone  = map[string]map[string]Backends{"80": map[string]Backends{"test": Backends{name: "test"}}}
 
 	// basic state
-	configBasic         = AutonegConfig{Name: "test", Rate: 100}
+	configBasicPort80        = AutonegNEGConfig{Name: "test", Rate: 100}
+	configBasicPort80Slice   = map[string]AutonegNEGConfig{"test": configBasicPort80}
+	configBasicPort80Backend = map[string]map[string]AutonegNEGConfig{"80": configBasicPort80Slice}
+	configBasic              = AutonegConfig{BackendServices: configBasicPort80Backend}
+
 	statusBasicWithNEGs = AutonegStatus{
 		AutonegConfig: configBasic,
 		NEGStatus:     negStatus,
 	}
-	backendsBasicWithNEGs = Backends{name: "test", backends: []compute.Backend{
-		statusBasicWithNEGs.Backend(getGroup(fakeProject, "zone1", fakeNeg)),
-		statusBasicWithNEGs.Backend(getGroup(fakeProject, "zone2", fakeNeg)),
-	}}
+	backendsBasicWithNEGs = map[string]map[string]Backends{"80": map[string]Backends{"test": Backends{name: "test", backends: []compute.Backend{
+		statusBasicWithNEGs.Backend("test", "80", getGroup(fakeProject, "zone1", fakeNeg)),
+		statusBasicWithNEGs.Backend("test", "80", getGroup(fakeProject, "zone2", fakeNeg)),
+	}}}}
 
 	// value changed state
-	configValueChange         = AutonegConfig{Name: "test", Rate: 200}
-	statusValueChangeWithNEGs = AutonegStatus{
+	configValueChangePort80        = AutonegNEGConfig{Name: "test", Rate: 200}
+	configValueChangePort80Slice   = map[string]AutonegNEGConfig{"test": configValueChangePort80}
+	configValueChangePort80Backend = map[string]map[string]AutonegNEGConfig{"80": configValueChangePort80Slice}
+	configValueChange              = AutonegConfig{BackendServices: configValueChangePort80Backend}
+	statusValueChangeWithNEGs      = AutonegStatus{
 		AutonegConfig: configValueChange,
 		NEGStatus:     negStatus,
 	}
-	backendsValueChangeWithNEGs = Backends{name: "test", backends: []compute.Backend{
-		statusValueChangeWithNEGs.Backend(getGroup(fakeProject, "zone1", fakeNeg)),
-		statusValueChangeWithNEGs.Backend(getGroup(fakeProject, "zone2", fakeNeg)),
-	}}
+	backendsValueChangeWithNEGs = map[string]map[string]Backends{"80": map[string]Backends{"test": Backends{name: "test", backends: []compute.Backend{
+		statusValueChangeWithNEGs.Backend("test", "80", getGroup(fakeProject, "zone1", fakeNeg)),
+		statusValueChangeWithNEGs.Backend("test", "80", getGroup(fakeProject, "zone2", fakeNeg)),
+	}}}}
 
 	// named changed state
-	configNameChange         = AutonegConfig{Name: "changed", Rate: 100}
-	statusNameChangeWithNEGs = AutonegStatus{
+	configNameChangePort80        = AutonegNEGConfig{Name: "changed", Rate: 100}
+	configNameChangePort80Slice   = map[string]AutonegNEGConfig{"changed": configValueChangePort80}
+	configNameChangePort80Backend = map[string]map[string]AutonegNEGConfig{"80": configNameChangePort80Slice}
+	configNameChange              = AutonegConfig{BackendServices: configNameChangePort80Backend}
+	statusNameChangeWithNEGs      = AutonegStatus{
 		AutonegConfig: configNameChange,
 		NEGStatus:     negStatus,
 	}
-	backendsNameChangeWithNEGs = Backends{name: "changed", backends: []compute.Backend{
-		statusNameChangeWithNEGs.Backend(getGroup(fakeProject, "zone1", fakeNeg)),
-		statusNameChangeWithNEGs.Backend(getGroup(fakeProject, "zone2", fakeNeg)),
-	}}
+	backendsNameChangeWithNEGs = map[string]map[string]Backends{"80": map[string]Backends{"changed": Backends{name: "changed", backends: []compute.Backend{
+		statusNameChangeWithNEGs.Backend("changed", "80", getGroup(fakeProject, "zone1", fakeNeg)),
+		statusNameChangeWithNEGs.Backend("changed", "80", getGroup(fakeProject, "zone2", fakeNeg)),
+	}}}}
+
+	// multi-port/multi-backend state
+	configMultiPort80Backend1  = AutonegNEGConfig{Name: "multi", Rate: 100}
+	configMultiPort80Backend2  = AutonegNEGConfig{Name: "multi-ilb", Region: "europe-west4", Connections: 100}
+	configMultiPort443Backend1 = AutonegNEGConfig{Name: "multi2", Rate: 100}
+	configMultiPort443Backend2 = AutonegNEGConfig{Name: "multi2-ilb", Region: "europe-west4", Connections: 100}
+	configMultiPort80Slice     = map[string]AutonegNEGConfig{"multi": configMultiPort80Backend1, "multi-ilb": configMultiPort80Backend2}
+	configMultiPort443Slice    = map[string]AutonegNEGConfig{"multi2": configMultiPort443Backend1, "multi2-ilb": configMultiPort443Backend2}
+	configMultiPortBackend     = map[string]map[string]AutonegNEGConfig{"80": configMultiPort80Slice, "443": configMultiPort443Slice}
+	configMulti                = AutonegConfig{BackendServices: configMultiPortBackend}
+
+	statusMultiWithNEGs = AutonegStatus{
+		AutonegConfig: configMulti,
+		NEGStatus:     negStatusMulti,
+	}
+	backendsMultiWithNEGs = map[string]map[string]Backends{
+		"80": map[string]Backends{"multi": Backends{name: "multi", backends: []compute.Backend{
+			statusMultiWithNEGs.Backend("multi", "80", getGroup(fakeProject, "zone1", fakeNeg)),
+			statusMultiWithNEGs.Backend("multi", "80", getGroup(fakeProject, "zone2", fakeNeg)),
+		}}, "multi-ilb": Backends{name: "multi-ilb", region: "europe-west4", backends: []compute.Backend{
+			statusMultiWithNEGs.Backend("multi-ilb", "80", getGroup(fakeProject, "zone1", fakeNeg)),
+			statusMultiWithNEGs.Backend("multi-ilb", "80", getGroup(fakeProject, "zone2", fakeNeg)),
+		}}}, "443": map[string]Backends{"multi2": Backends{name: "multi2", backends: []compute.Backend{
+			statusMultiWithNEGs.Backend("multi2", "443", getGroup(fakeProject, "zone1", fakeNeg2)),
+			statusMultiWithNEGs.Backend("multi2", "443", getGroup(fakeProject, "zone2", fakeNeg2)),
+		}}, "multi2-ilb": Backends{name: "multi2-ilb", region: "europe-west4", backends: []compute.Backend{
+			statusMultiWithNEGs.Backend("multi2-ilb", "443", getGroup(fakeProject, "zone1", fakeNeg2)),
+			statusMultiWithNEGs.Backend("multi2-ilb", "443", getGroup(fakeProject, "zone2", fakeNeg2)),
+		}}},
+	}
+
+	configMultiChangePort80Slice  = map[string]AutonegNEGConfig{"multi": configMultiPort80Backend1}
+	configMultiChangePort443Slice = map[string]AutonegNEGConfig{"multi2": configMultiPort443Backend1}
+	configMultiChangePortBackend  = map[string]map[string]AutonegNEGConfig{"80": configMultiChangePort80Slice, "443": configMultiChangePort443Slice}
+	configMultiChange             = AutonegConfig{BackendServices: configMultiChangePortBackend}
+
+	statusMultiChangeWithNEGs = AutonegStatus{
+		AutonegConfig: configMultiChange,
+		NEGStatus:     negStatusMulti,
+	}
+	backendsMultiChangeWithNEGs = map[string]map[string]Backends{
+		"80": map[string]Backends{"multi": Backends{name: "multi", backends: []compute.Backend{
+			statusMultiWithNEGs.Backend("multi", "80", getGroup(fakeProject, "zone1", fakeNeg)),
+			statusMultiWithNEGs.Backend("multi", "80", getGroup(fakeProject, "zone2", fakeNeg)),
+		}}, "multi-ilb": Backends{name: "multi-ilb", region: "europe-west4", backends: []compute.Backend{}}}, "443": map[string]Backends{"multi2": Backends{name: "multi2", backends: []compute.Backend{
+			statusMultiWithNEGs.Backend("multi2", "443", getGroup(fakeProject, "zone1", fakeNeg2)),
+			statusMultiWithNEGs.Backend("multi2", "443", getGroup(fakeProject, "zone2", fakeNeg2)),
+		}}, "multi2-ilb": Backends{name: "multi2-ilb", region: "europe-west4", backends: []compute.Backend{}}},
+	}
+	backendsMultiChangeWithNEGsRemoves = map[string]map[string]Backends{
+		"80": map[string]Backends{"multi": Backends{name: "multi", backends: []compute.Backend{}}, "multi-ilb": Backends{name: "multi-ilb", region: "europe-west4", backends: []compute.Backend{
+			statusMultiWithNEGs.Backend("multi-ilb", "80", getGroup(fakeProject, "zone1", fakeNeg)),
+			statusMultiWithNEGs.Backend("multi-ilb", "80", getGroup(fakeProject, "zone2", fakeNeg)),
+		}}}, "443": map[string]Backends{"multi2": Backends{name: "multi2", backends: []compute.Backend{}}, "multi2-ilb": Backends{name: "multi2-ilb", region: "europe-west4", backends: []compute.Backend{
+			statusMultiWithNEGs.Backend("multi2-ilb", "443", getGroup(fakeProject, "zone1", fakeNeg2)),
+			statusMultiWithNEGs.Backend("multi2-ilb", "443", getGroup(fakeProject, "zone2", fakeNeg2)),
+		}}},
+	}
+
+	// remove first backend
+	configMultiChangeFirstPort80Slice  = map[string]AutonegNEGConfig{"multi-ilb": configMultiPort80Backend2}
+	configMultiChangeFirstPort443Slice = map[string]AutonegNEGConfig{"multi2-ilb": configMultiPort443Backend2}
+	configMultiChangeFirstPortBackend  = map[string]map[string]AutonegNEGConfig{"80": configMultiChangeFirstPort80Slice, "443": configMultiChangeFirstPort443Slice}
+	configMultiChangeFirst             = AutonegConfig{BackendServices: configMultiChangeFirstPortBackend}
+
+	statusMultiChangeFirstWithNEGs = AutonegStatus{
+		AutonegConfig: configMultiChangeFirst,
+		NEGStatus:     negStatusMulti,
+	}
+	backendsMultiChangeFirstWithNEGs = map[string]map[string]Backends{
+		"80": map[string]Backends{"multi": Backends{name: "multi", backends: []compute.Backend{}}, "multi-ilb": Backends{name: "multi-ilb", region: "europe-west4", backends: []compute.Backend{
+			statusMultiWithNEGs.Backend("multi-ilb", "80", getGroup(fakeProject, "zone1", fakeNeg)),
+			statusMultiWithNEGs.Backend("multi-ilb", "80", getGroup(fakeProject, "zone2", fakeNeg)),
+		}}}, "443": map[string]Backends{"multi2": Backends{name: "multi2", backends: []compute.Backend{}}, "multi2-ilb": Backends{name: "multi2-ilb", region: "europe-west4", backends: []compute.Backend{
+			statusMultiWithNEGs.Backend("multi2-ilb", "443", getGroup(fakeProject, "zone1", fakeNeg2)),
+			statusMultiWithNEGs.Backend("multi2-ilb", "443", getGroup(fakeProject, "zone2", fakeNeg2)),
+		}}},
+	}
+	backendsMultiChangeFirstWithNEGsRemoves = map[string]map[string]Backends{
+		"80": map[string]Backends{"multi": Backends{name: "multi", backends: []compute.Backend{
+			statusMultiWithNEGs.Backend("multi", "80", getGroup(fakeProject, "zone1", fakeNeg)),
+			statusMultiWithNEGs.Backend("multi", "80", getGroup(fakeProject, "zone2", fakeNeg)),
+		}}, "multi-ilb": Backends{name: "multi-ilb", region: "europe-west4", backends: []compute.Backend{}}}, "443": map[string]Backends{"multi2": Backends{name: "multi2", backends: []compute.Backend{
+			statusMultiWithNEGs.Backend("multi2", "443", getGroup(fakeProject, "zone1", fakeNeg2)),
+			statusMultiWithNEGs.Backend("multi2", "443", getGroup(fakeProject, "zone2", fakeNeg2)),
+		}}, "multi2-ilb": Backends{name: "multi2-ilb", region: "europe-west4", backends: []compute.Backend{}}},
+	}
 )
 
 var reconcileTests = []struct {
 	name     string
 	actual   AutonegStatus
 	intended AutonegStatus
-	remove   Backends
-	upsert   Backends
+	removes  map[string]map[string]Backends
+	upserts  map[string]map[string]Backends
 }{
 	{
-		"inital to basic",
+		"initial to basic",
 		statusInitial,
 		statusBasicWithNEGs,
 		backendsNone,
@@ -236,6 +454,35 @@ var reconcileTests = []struct {
 		backendsNone,
 		backendsValueChangeWithNEGs,
 	},
+	{
+		"basic to value changed",
+		statusBasicWithNEGs,
+		statusValueChangeWithNEGs,
+		backendsNone,
+		backendsValueChangeWithNEGs,
+	},
+	{
+		"empty to multiport",
+		statusEmpty,
+		statusMultiWithNEGs,
+		backendsEmpty,
+		backendsMultiWithNEGs,
+	},
+	{
+		"multiport remove second backend",
+		statusMultiWithNEGs,
+		statusMultiChangeWithNEGs,
+		backendsMultiChangeWithNEGsRemoves,
+		backendsMultiChangeWithNEGs,
+	},
+	{
+		"multiport remove first backend",
+		statusMultiWithNEGs,
+		statusMultiChangeFirstWithNEGs,
+		backendsMultiChangeFirstWithNEGsRemoves,
+		backendsMultiChangeFirstWithNEGs,
+	},
+
 	// {
 	// 	"basic to name changed",
 	// 	statusBasicWithNEGs,
@@ -247,12 +494,35 @@ var reconcileTests = []struct {
 
 func TestReconcileStatuses(t *testing.T) {
 	for _, rt := range reconcileTests {
-		remove, upsert := ReconcileStatus(fakeProject, rt.actual, rt.intended)
-		if !rt.remove.isEqual(remove) {
-			t.Errorf("Set %q: Removed backends: expected:\n%+v\n got:\n%+v", rt.name, rt.remove, remove)
+		removes, upserts := ReconcileStatus(fakeProject, rt.actual, rt.intended)
+		for port := range rt.removes {
+			if _, ok := removes[port]; !ok {
+				t.Errorf("Set %q: Removed port %s backends: expected:\n%+v\n got missing key %+v", rt.name, port, rt.removes[port], port)
+			} else {
+				if len(rt.removes[port]) != len(removes[port]) {
+					t.Errorf("Set %q: Removed port %s backends: expected:\n%+v\n got different lengths %d != %d", rt.name, port, rt.removes[port], len(rt.removes[port]), len(removes[port]))
+				}
+				for idx := range rt.removes[port] {
+					if !rt.removes[port][idx].isEqual(removes[port][idx]) {
+						t.Errorf("Set %q/%s: Removed port %s backends: expected:\n%+v\n got:\n%+v", rt.name, idx, port, rt.removes[port][idx], removes[port][idx])
+					}
+				}
+			}
 		}
-		if !rt.upsert.isEqual(upsert) {
-			t.Errorf("Set %q: Upserted backends: expected:\n%+v\n got:\n%+v", rt.name, rt.upsert, upsert)
+		for port := range rt.upserts {
+			if _, ok := upserts[port]; !ok {
+				t.Errorf("Set %q: Upserted port %s backends: expected:\n%+v\n got missing key %+v", rt.name, port, rt.upserts[port], port)
+			} else {
+				if len(rt.upserts[port]) != len(upserts[port]) {
+					t.Errorf("Set %q: Upserted port %s backends: expected:\n%+v\n got different lengths %d != %d", rt.name, port, rt.upserts[port], len(rt.upserts[port]), len(upserts[port]))
+				} else {
+					for idx := range rt.upserts[port] {
+						if !rt.upserts[port][idx].isEqual(upserts[port][idx]) {
+							t.Errorf("Set %q/%s: Upserted port %s backends: expected:\n%+v\n got:\n%+v", rt.name, idx, port, rt.upserts[port][idx], upserts[port][idx])
+						}
+					}
+				}
+			}
 		}
 	}
 }

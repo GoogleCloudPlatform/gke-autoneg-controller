@@ -1,5 +1,5 @@
 /*
-Copyright 2019 Google LLC.
+Copyright 2019-2021 Google LLC.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,13 +27,39 @@ type NEGStatus struct {
 
 // AutonegConfig specifies the intended configuration of autoneg
 // stored in the anthos.cft.dev/autoneg annotation
-type AutonegConfig struct {
+type OldAutonegConfig struct {
 	Name string  `json:"name"`
 	Rate float64 `json:"max_rate_per_endpoint"`
 }
 
+// AutonegConfig specifies the intended configuration of autoneg
+// stored in the controller.autoneg.dev/neg annotation
+type AutonegConfig struct {
+	BackendServices map[string]map[string]AutonegNEGConfig `json:"backend_services"`
+}
+
+type AutonegConfigTemp struct {
+	BackendServices map[string][]AutonegNEGConfig `json:"backend_services"`
+}
+
+// AutonegConfig specifies the intended configuration of autoneg
+// stored in the controller.autoneg.dev/neg annotation
+type AutonegNEGConfig struct {
+	Name        string  `json:"name,omitempty"`
+	Region      string  `json:"region,omitempty"`
+	Rate        float64 `json:"max_rate_per_endpoint,omitempty"`
+	Connections float64 `json:"max_connections_per_endpoint,omitempty"`
+}
+
 // AutonegStatus specifies the reconciled status of autoneg
 // stored in the anthos.cft.dev/autoneg-status annotation
+type OldAutonegStatus struct {
+	OldAutonegConfig
+	NEGStatus
+}
+
+// AutonegStatus specifies the reconciled status of autoneg
+// stored in the controller.autoneg.dev/neg annotation
 type AutonegStatus struct {
 	AutonegConfig
 	NEGStatus
@@ -41,14 +67,19 @@ type AutonegStatus struct {
 
 // Statuses represents the autoneg-relevant structs fetched from annotations
 type Statuses struct {
-	anConfig  AutonegConfig
-	anStatus  AutonegStatus
+	oldConfig OldAutonegConfig
+	config    AutonegConfig
+	oldStatus OldAutonegStatus
+	status    AutonegStatus
 	negStatus NEGStatus
+	negConfig NEGConfig
+	newConfig bool
 }
 
 // Backends specifies a name and list of compute.Backends
 type Backends struct {
 	name     string
+	region   string
 	backends []compute.Backend
 }
 
@@ -56,4 +87,10 @@ type Backends struct {
 type BackendController struct {
 	project string
 	s       *compute.Service
+}
+
+// NEGConfig specifies the configuration stored in
+// in the cloud.google.com/neg annotation
+type NEGConfig struct {
+	ExposedPorts map[string]interface{} `json:"exposed_ports"`
 }
