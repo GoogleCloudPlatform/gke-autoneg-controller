@@ -202,7 +202,7 @@ spec:
         - --enable-leader-election
         command:
         - /manager
-        image: ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:0.9.3
+        image: ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:v0.9.3
         name: manager
         resources:
           limits:
