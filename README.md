@@ -68,6 +68,29 @@ kubectl annotate sa -n autoneg-system default \
 ```
 This will create all the Kubernetes resources required to support `autoneg` and annotate the default service account in the `autoneg-system` namespace to associate a GCP service account using [Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity). 
 
+### Installation via Terraform
+
+You can use the Terraform module in `terraform/autoneg` to deploy Autoneg in a GKE cluster of your choice.
+
+Example:
+
+```tf
+provider "google" {
+}
+
+provider "kubernetes" {
+  cluster_ca_certificate = "..."
+  host                   = "..."
+  token                  = "..."
+}
+
+module "autoneg" {
+  source = "github.com/GoogleCloudPlatform/gke-autoneg-controller//terraform/autoneg"
+
+  project_id = "your-project-id"
+}
+```
+
 ### Customizing your installation
 `autoneg` is based on [Kubebuilder](https://kubebuilder.io), and as such, you can customize and deploy `autoneg` according to the Kubebuilder "Run It On the Cluster" section of the [Quick Start](https://kubebuilder.io/quick-start.html#run-it-on-the-cluster). `autoneg` does not define a CRD, so you can skip any Kubebuilder steps involving CRDs.
 
