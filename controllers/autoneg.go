@@ -76,10 +76,11 @@ func (s AutonegStatus) Backend(name string, port string, group string) compute.B
 }
 
 // NewBackendController takes the project name and an initialized *compute.Service
-func NewBackendController(project string, s *compute.Service) *BackendController {
+func NewBackendController(project string, location string, s *compute.Service) *BackendController {
 	return &BackendController{
-		project: project,
-		s:       s,
+		project:  project,
+		location: location,
+		s:        s,
 	}
 }
 
@@ -167,7 +168,7 @@ func checkOperation(op *compute.Operation) error {
 // ReconcileBackends takes the actual and intended AutonegStatus
 // and attempts to apply the intended status or return an error
 func (b *BackendController) ReconcileBackends(actual, intended AutonegStatus) (err error) {
-	removes, upserts := ReconcileStatus(b.project, actual, intended)
+	removes, upserts := ReconcileStatus(b.project, b.location, actual, intended)
 
 	for port, _removes := range removes {
 		for idx, remove := range _removes {
@@ -242,7 +243,7 @@ func sortBackends(backends *[]compute.Backend) {
 
 // ReconcileStatus takes the actual and intended AutonegStatus
 // and returns sets of backends to remove, and to upsert
-func ReconcileStatus(project string, actual AutonegStatus, intended AutonegStatus) (removes, upserts map[string]map[string]Backends) {
+func ReconcileStatus(project string, location string, actual AutonegStatus, intended AutonegStatus) (removes, upserts map[string]map[string]Backends) {
 	upserts = make(map[string]map[string]Backends, 0)
 	removes = make(map[string]map[string]Backends, 0)
 
@@ -279,7 +280,11 @@ func ReconcileStatus(project string, actual AutonegStatus, intended AutonegStatu
 
 		groups := intendedBE[port]
 		for bname, be := range intended.BackendServices[port] {
-			upsert := Backends{name: be.Name, region: be.Region}
+			region := be.Region
+			if be.Regional != nil && *be.Regional && region == "" {
+				region = location
+			}
+			upsert := Backends{name: be.Name, region: region}
 
 			var groupsKeys []string
 			for k := range groups {
@@ -294,7 +299,7 @@ func ReconcileStatus(project string, actual AutonegStatus, intended AutonegStatu
 			sortBackends(&upsert.backends)
 			upserts[port][bname] = upsert
 
-			remove := Backends{name: be.Name, region: be.Region}
+			remove := Backends{name: be.Name, region: region}
 			// test to see if we are changing backend services
 			if _, ok := actual.BackendServices[port][bname]; ok {
 				if actual.BackendServices[port][bname].Name == be.Name || actual.BackendServices[port][bname].Name == "" {
@@ -309,8 +314,13 @@ func ReconcileStatus(project string, actual AutonegStatus, intended AutonegStatu
 					removes[port][bname] = remove
 				} else {
 					// moving to a different backend service means removing all actual backends
+					aregion := actual.BackendServices[port][bname].Region
+					if actual.BackendServices[port][bname].Regional != nil && *actual.BackendServices[port][bname].Regional && aregion == "" {
+						aregion = location
+					}
+
 					remove.name = actual.BackendServices[port][bname].Name
-					remove.region = actual.BackendServices[port][bname].Region
+					remove.region = aregion
 					for a := range actualBE[port] {
 						rbe := actual.Backend(bname, port, a)
 						remove.backends = append(remove.backends, rbe)
@@ -321,7 +331,7 @@ func ReconcileStatus(project string, actual AutonegStatus, intended AutonegStatu
 			} else {
 				// add empty remove if adding to a mint backend service
 				remove.name = intended.BackendServices[port][bname].Name
-				remove.region = intended.BackendServices[port][bname].Region
+				remove.region = region
 				removes[port][bname] = remove
 			}
 		}
@@ -330,9 +340,11 @@ func ReconcileStatus(project string, actual AutonegStatus, intended AutonegStatu
 		for aname := range actual.BackendServices[port] {
 			if _, ok := intended.BackendServices[port][aname]; !ok {
 				be := actual.BackendServices[port][aname]
-				remove := Backends{name: be.Name, region: be.Region}
-				remove.name = actual.BackendServices[port][aname].Name
-				remove.region = actual.BackendServices[port][aname].Region
+				bregion := be.Region
+				if be.Regional != nil && *be.Regional && bregion == "" {
+					bregion = location
+				}
+				remove := Backends{name: be.Name, region: bregion}
 				for a := range actualBE[port] {
 					rbe := actual.Backend(aname, port, a)
 					remove.backends = append(remove.backends, rbe)
@@ -340,7 +352,7 @@ func ReconcileStatus(project string, actual AutonegStatus, intended AutonegStatu
 				sortBackends(&remove.backends)
 				removes[port][aname] = remove
 
-				upsert := Backends{name: be.Name, region: be.Region}
+				upsert := Backends{name: be.Name, region: bregion}
 				upserts[port][aname] = upsert
 			}
 		}

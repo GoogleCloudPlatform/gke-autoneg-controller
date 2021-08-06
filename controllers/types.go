@@ -47,6 +47,7 @@ type AutonegConfigTemp struct {
 type AutonegNEGConfig struct {
 	Name        string  `json:"name,omitempty"`
 	Region      string  `json:"region,omitempty"`
+	Regional    *bool   `json:"regional,omitempty"`
 	Rate        float64 `json:"max_rate_per_endpoint,omitempty"`
 	Connections float64 `json:"max_connections_per_endpoint,omitempty"`
 }
@@ -85,8 +86,9 @@ type Backends struct {
 
 // BackendController manages operations on a GCLB backend service
 type BackendController struct {
-	project string
-	s       *compute.Service
+	project  string
+	location string
+	s        *compute.Service
 }
 
 // NEGConfig specifies the configuration stored in

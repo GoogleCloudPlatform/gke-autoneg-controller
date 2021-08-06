@@ -281,10 +281,11 @@ func (b Backends) isEqual(ob Backends) bool {
 }
 
 var (
-	fakeNeg     = "neg_name"
-	fakeNeg2    = "neg_name2"
-	fakeProject = "project"
-	negStatus   = NEGStatus{
+	fakeNeg      = "neg_name"
+	fakeNeg2     = "neg_name2"
+	fakeProject  = "project"
+	fakeLocation = "europe-west4-c"
+	negStatus    = NEGStatus{
 		NEGs:  map[string]string{"80": fakeNeg},
 		Zones: []string{"zone1", "zone2"},
 	}
@@ -494,7 +495,7 @@ var reconcileTests = []struct {
 
 func TestReconcileStatuses(t *testing.T) {
 	for _, rt := range reconcileTests {
-		removes, upserts := ReconcileStatus(fakeProject, rt.actual, rt.intended)
+		removes, upserts := ReconcileStatus(fakeProject, fakeLocation, rt.actual, rt.intended)
 		for port := range rt.removes {
 			if _, ok := removes[port]; !ok {
 				t.Errorf("Set %q: Removed port %s backends: expected:\n%+v\n got missing key %+v", rt.name, port, rt.removes[port], port)

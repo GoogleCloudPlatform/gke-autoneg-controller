@@ -73,6 +73,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	location := getLocation()
+	if location == "" {
+		setupLog.Error(err, "can't determine cluster location")
+		os.Exit(1)
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
@@ -85,7 +91,7 @@ func main() {
 
 	if err = (&controllers.ServiceReconciler{
 		Client:            mgr.GetClient(),
-		BackendController: controllers.NewBackendController(project, s),
+		BackendController: controllers.NewBackendController(project, location, s),
 		Recorder:          mgr.GetEventRecorderFor("autoneg-controller"),
 		Log:               ctrl.Log.WithName("controllers").WithName("Service"),
 	}).SetupWithManager(mgr); err != nil {
@@ -108,4 +114,16 @@ func getProject() string {
 		return p
 	}
 	return os.Getenv("PROJECT_ID")
+}
+
+func getLocation() string {
+	// probe metadata service for cluster location, or return empty
+	p, err := metadata.InstanceAttributeValue("cluster-location")
+	if err == nil {
+		if p[len(p)-2] == '-' { // zonal cluster
+			return p[0 : len(p)-2]
+		}
+		return p
+	}
+	return ""
 }
