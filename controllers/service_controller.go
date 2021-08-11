@@ -59,7 +59,7 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return reconcile.Result{}, err
 	}
 
-	status, ok, err := getStatuses(svc.Name, svc.ObjectMeta.Annotations)
+	status, ok, err := getStatuses(svc.Namespace, svc.Name, svc.ObjectMeta.Annotations)
 	// Is this service using autoneg?
 	if !ok {
 		return reconcile.Result{}, nil

@@ -24,10 +24,11 @@ import (
 )
 
 var (
-	malformedJSON    = `{`
-	validConfig      = `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":100}],"443":[{"name":"https-be","max_connections_per_endpoint":1000}]}}`
-	brokenConfig     = `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":"100"}],"443":[{"name":"https-be","max_connections_per_endpoint":1000}}}`
-	validMultiConfig = `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":100},{"name":"http-ilb-be","max_rate_per_endpoint":100}],"443":[{"name":"https-be","max_connections_per_endpoint":1000},{"name":"https-ilb-be","max_connections_per_endpoint":1000}]}}`
+	malformedJSON     = `{`
+	validConfig       = `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":100}],"443":[{"name":"https-be","max_connections_per_endpoint":1000}]}}`
+	brokenConfig      = `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":"100"}],"443":[{"name":"https-be","max_connections_per_endpoint":1000}}}`
+	validMultiConfig  = `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":100},{"name":"http-ilb-be","max_rate_per_endpoint":100}],"443":[{"name":"https-be","max_connections_per_endpoint":1000},{"name":"https-ilb-be","max_connections_per_endpoint":1000}]}}`
+	validConfigWoName = `{"backend_services":{"80":[{"max_rate_per_endpoint":100}],"443":[{"max_connections_per_endpoint":1000}]}}`
 
 	validStatus        = `{}`
 	validAutonegConfig = `{}`
@@ -100,6 +101,15 @@ var statusTests = []struct {
 		"valid autoneg with valid neg status",
 		map[string]string{
 			autonegAnnotation:   validConfig,
+			negStatusAnnotation: validStatus,
+		},
+		true,
+		false,
+	},
+	{
+		"valid autoneg without neg name",
+		map[string]string{
+			autonegAnnotation:   validConfigWoName,
 			negStatusAnnotation: validStatus,
 		},
 		true,
@@ -199,7 +209,7 @@ var oldStatusTests = []struct {
 
 func TestGetStatuses(t *testing.T) {
 	for _, st := range statusTests {
-		_, valid, err := getStatuses("test", st.annotations)
+		_, valid, err := getStatuses("ns", "test", st.annotations)
 		if err != nil && !st.err {
 			t.Errorf("Set %q: expected no error, got one: %v", st.name, err)
 		}
@@ -217,7 +227,7 @@ func TestGetStatuses(t *testing.T) {
 
 func TestGetOldStatuses(t *testing.T) {
 	for _, st := range oldStatusTests {
-		_, valid, err := getStatuses("test", st.annotations)
+		_, valid, err := getStatuses("ns", "test", st.annotations)
 		if err != nil && !st.err {
 			t.Errorf("Set %q: expected no error, got one: %v", st.name, err)
 		}
