@@ -22,27 +22,62 @@ import (
 	"strings"
 )
 
-// maxNEGNameLength is the max length for namespace, name and
-// port for neg name.  63 - 8 (suffix hash) - 3 (hyphen connector) = 52
-var maxNEGNameLength = 52
+var maxNEGNameLength = 63
 
-// NEG returns backend neg name based on the service namespace, name
-// and target port. NEG naming convention:
-//
-//   {namespace}-{name}-{service port}-{hash}
-//
-// Output name is at most 63 characters.
-func generateNegName(namespace string, name string, portStr string) string {
-	truncFields := TrimFieldsEvenly(maxNEGNameLength, namespace, name, portStr)
-	truncNamespace := truncFields[0]
-	truncName := truncFields[1]
-	truncPort := truncFields[2]
-	negString := strings.Join([]string{namespace, name, portStr}, "-")
-	negHash := fmt.Sprintf("%x", sha256.Sum256([]byte(negString)))
-	return fmt.Sprintf("%s-%s-%s-%s", truncNamespace, truncName, truncPort, negHash)
+// Validates the given negNameTemplate
+// A template should only contain {namespace}, {name}, {port} or {hash} separated by hyphens
+func IsValidNEGTemplate(negNameTemplate string) bool {
+	if negNameTemplate == "" {
+		return false
+	}
+	for _, tag := range strings.Split(negNameTemplate, "-") {
+		if tag != "{namespace}" && tag != "{name}" && tag != "{port}" && tag != "{hash}" {
+			return false
+		}
+	}
+	return true
 }
 
-// This function is copied from:
+// NEG returns backend neg name based on the service namespace, name
+// or target port following the given neg name template.
+//
+// Output name is at most 63 characters.
+func generateNegName(namespace string, name string, portStr string, negNameTemplate string) string {
+	negString := strings.Join([]string{namespace, name, portStr}, "-")
+	negHash := fmt.Sprintf("%x", sha256.Sum256([]byte(negString)))[:8]
+	negTemplateTags := strings.Split(negNameTemplate, "-")
+
+	var fieldsToTruncate []string
+	for _, field := range negTemplateTags {
+		switch field {
+		case "{namespace}":
+			fieldsToTruncate = append(fieldsToTruncate, namespace)
+		case "{name}":
+			fieldsToTruncate = append(fieldsToTruncate, name)
+		case "{port}":
+			fieldsToTruncate = append(fieldsToTruncate, portStr)
+		}
+	}
+
+	// maxNEGNameLength is the max length for neg without hyphens and hash (8). 63 - hashlength - numberOfHyphens
+	maxNegLengthWoHash := maxNEGNameLength - strings.Count(negNameTemplate, "{hash}")*8 - strings.Count(negNameTemplate, "-")
+	truncFields := TrimFieldsEvenly(maxNegLengthWoHash, fieldsToTruncate...)
+
+	// form the final neg name string with hash
+	var fields []string
+	indexTruncFields := 0
+	for _, field := range negTemplateTags {
+		if field == "{hash}" {
+			fields = append(fields, negHash)
+		} else {
+			fields = append(fields, truncFields[indexTruncFields])
+			indexTruncFields++
+		}
+	}
+	return strings.Join(fields, "-")
+}
+
+// This function is mostly copied from:
 // https://github.com/kubernetes/ingress-gce/blob/4cb04408a6266b5ea00d9567c6165b9235392972/pkg/utils/namer/utils.go#L27..L62
 // TrimFieldsEvenly trims the fields evenly and keeps the total length
 // <= max. Truncation is spread in ratio with their original length,

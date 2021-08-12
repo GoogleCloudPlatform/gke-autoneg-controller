@@ -19,7 +19,7 @@ In your GKE service, two annotations are required in your service definition:
 * `cloud.google.com/neg` enables the GKE NEG controller; specify as [standalone NEGs](https://cloud.google.com/kubernetes-engine/docs/how-to/standalone-neg)
 * `controller.autoneg.dev/neg` specifies name and other configuration
    * Previous version used `anthos.cft.dev/autoneg` as annotation and it's still supported, but deprecated and will be removed in subsequent releases.
-   * Note that `name` is optional here and defaults to `<namespace>-<name>-<port>-<hash>`. `namespace`, `name` and `port` will be truncated evenly if the full name is longer than 63 characters. `<hash>` is generated using full length `namespace`, `name` and `port` to avoid name collision.
+   * Note that `name` is optional here and defaults to a value generated following negNameTemplage. The template defaults to `{name}-{port}` and can be configured using `--neg-name-template` flag. It can contain `namespace`, `name`, `port` and `hash` and the non hash values will be truncated evenly if the full name is longer than 63 characters. `<hash>` is generated using full length `namespace`, `name` and `port` to avoid name collisions when truncated.
 ```yaml
 metadata:
   annotations:
@@ -41,7 +41,7 @@ Specify options to configure the backends representing the NEGs that will be ass
 
 ### Options
 
-* `name`: optional. The name of the backend service to register backends with. Defaults to `<namespace>-<name>-<port>-<hash>`.
+* `name`: optional. The name of the backend service to register backends with. Defaults to a value generated using the given template.
    * The default name value for old `anthos.cft.dev/autoneg` annotation is service name.
 * `region`: optional. Used to specify that this is a regional backend service.
 * `max_rate_per_endpoint`: required/optional. Integer representing the maximum rate a pod can handle. Pick either rate or connection.

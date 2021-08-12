@@ -209,7 +209,7 @@ var oldStatusTests = []struct {
 
 func TestGetStatuses(t *testing.T) {
 	for _, st := range statusTests {
-		_, valid, err := getStatuses("ns", "test", st.annotations)
+		_, valid, err := getStatuses("ns", "test", st.annotations, "{namespace}-{name}-{port}-{hash}")
 		if err != nil && !st.err {
 			t.Errorf("Set %q: expected no error, got one: %v", st.name, err)
 		}
@@ -227,7 +227,7 @@ func TestGetStatuses(t *testing.T) {
 
 func TestGetOldStatuses(t *testing.T) {
 	for _, st := range oldStatusTests {
-		_, valid, err := getStatuses("ns", "test", st.annotations)
+		_, valid, err := getStatuses("ns", "test", st.annotations, "{namespace}-{name}-{port}-{hash}")
 		if err != nil && !st.err {
 			t.Errorf("Set %q: expected no error, got one: %v", st.name, err)
 		}
