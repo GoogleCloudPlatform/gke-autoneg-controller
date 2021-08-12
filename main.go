@@ -18,7 +18,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
+	"fmt"
 	"os"
 
 	"cloud.google.com/go/compute/metadata"
@@ -51,9 +53,13 @@ func init() {
 func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
+	var negNameTemplate string
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	flag.StringVar(&negNameTemplate, "neg-name-template", "{name}-{port}",
+		"A naming template consists of {namespace}, {name}, {port} or {hash} separated by hyphens, "+
+			"where {hash} is the first 8 digits of a hash of other given information")
 	flag.Parse()
 
 	ctrl.SetLogger(zap.Logger(true))
@@ -73,6 +79,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	if !controllers.IsValidNEGTemplate(negNameTemplate) {
+		err = errors.New(fmt.Sprintf("invlaid neg name template %s", negNameTemplate))
+		setupLog.Error(err, "invalid neg name template")
+		os.Exit(1)
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
@@ -88,6 +100,7 @@ func main() {
 		BackendController: controllers.NewBackendController(project, s),
 		Recorder:          mgr.GetEventRecorderFor("autoneg-controller"),
 		Log:               ctrl.Log.WithName("controllers").WithName("Service"),
+		NegNameTemplate:   negNameTemplate,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Service")
 		os.Exit(1)

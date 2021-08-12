@@ -363,7 +363,7 @@ func validateNewConfig(cfg AutonegConfig) error {
 	return nil
 }
 
-func getStatuses(namespace string, name string, annotations map[string]string) (s Statuses, valid bool, err error) {
+func getStatuses(namespace string, name string, annotations map[string]string, negNameTemplate string) (s Statuses, valid bool, err error) {
 	// Read the current cloud.google.com/neg annotation
 	tmp, ok := annotations[negAnnotation]
 	if ok {
@@ -389,8 +389,8 @@ func getStatuses(namespace string, name string, annotations map[string]string) (
 			s.config.BackendServices[port] = make(map[string]AutonegNEGConfig, len(cfgs))
 			for _, cfg := range cfgs {
 				if cfg.Name == "" {
-					// Default to the k8s service name + port
-					cfg.Name = generateNegName(namespace, name, port)
+					// Default to name generated using negNameTemplate
+					cfg.Name = generateNegName(namespace, name, port, negNameTemplate)
 				}
 				s.config.BackendServices[port][cfg.Name] = cfg
 			}
