@@ -79,7 +79,7 @@ func main() {
 	}
 
 	if !controllers.IsValidServiceNameTemplate(serviceNameTemplate) {
-		err = fmt.Errorf("invlaid service name template %s", serviceNameTemplate)
+		err = fmt.Errorf("invalid service name template %s", serviceNameTemplate)
 		setupLog.Error(err, "invalid service name template")
 		os.Exit(1)
 	}
