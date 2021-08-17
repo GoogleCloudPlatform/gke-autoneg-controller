@@ -22,84 +22,84 @@ import (
 	"testing"
 )
 
-var negNameTemplate = "{namespace}-{name}-{port}-{hash}"
+var serviceNameTemplate = "{namespace}-{name}-{port}-{hash}"
 
-func TestNegNameGeneration(t *testing.T) {
+func TestServiceNameGeneration(t *testing.T) {
 
-	negName := generateNegName("ns", "name", "8080", negNameTemplate)
-	expectedNegName := "ns-name-8080-" + hash("ns-name-8080")
-	if negName != expectedNegName {
-		t.Errorf("negName = %q, expect %q", negName, expectedNegName)
+	serviceName := generateServiceName("ns", "name", "8080", serviceNameTemplate)
+	expectedServiceName := "ns-name-8080-" + hash("ns-name-8080")
+	if serviceName != expectedServiceName {
+		t.Errorf("serviceName = %q, expect %q", serviceName, expectedServiceName)
 	}
 }
 
-func TestLongNegNameGeneration(t *testing.T) {
+func TestLongServiceNameGeneration(t *testing.T) {
 
-	negName := generateNegName("longlonglonglonglonglonglongnamespace", "longlonglongname", "8080", negNameTemplate)
-	expectedNegName := "longlonglonglonglonglonglongnamesp-longlonglongnam-808-" + hash("longlonglonglonglonglonglongnamespace-longlonglongname-8080")
-	if negName != expectedNegName {
-		t.Errorf("negName = %q, expect %q", negName, expectedNegName)
+	serviceName := generateServiceName("longlonglonglonglonglonglongnamespace", "longlonglongname", "8080", serviceNameTemplate)
+	expectedServiceName := "longlonglonglonglonglonglongnamesp-longlonglongnam-808-" + hash("longlonglonglonglonglonglongnamespace-longlonglongname-8080")
+	if serviceName != expectedServiceName {
+		t.Errorf("serviceName = %q, expect %q", serviceName, expectedServiceName)
 	}
-	if len(negName) != 63 {
-		t.Errorf("max neg name length should be 63 but is %q", len(negName))
-	}
-}
-
-func TestLongNegNamesHaveDifferentHashes(t *testing.T) {
-
-	negName1 := generateNegName("longlonglonglonglonglonglongnamespace1", "longlonglongname", "8080", negNameTemplate)
-	negName2 := generateNegName("longlonglonglonglonglonglongnamespace2", "longlonglongname", "8080", negNameTemplate)
-	if negName1 == negName2 {
-		t.Errorf("negName1 should be different from negName2, but both are %q", negName1)
+	if len(serviceName) != 63 {
+		t.Errorf("max service name length should be 63 but is %q", len(serviceName))
 	}
 }
 
-func TestValidNegTemplate(t *testing.T) {
+func TestLongServiceNamesHaveDifferentHashes(t *testing.T) {
+
+	serviceName1 := generateServiceName("longlonglonglonglonglonglongnamespace1", "longlonglongname", "8080", serviceNameTemplate)
+	serviceName2 := generateServiceName("longlonglonglonglonglonglongnamespace2", "longlonglongname", "8080", serviceNameTemplate)
+	if serviceName1 == serviceName2 {
+		t.Errorf("serviceName1 should be different from serviceName2, but both are %q", serviceName1)
+	}
+}
+
+func TestValidServiceTemplate(t *testing.T) {
 	validTemplates := []string{"{namespace}", "{name}", "{port}", "{hash}", "{name}-{port}", "{namespace}-{name}-{port}-{hash}"}
 	for _, template := range validTemplates {
-		if !IsValidNEGTemplate(template) {
+		if !IsValidServiceNameTemplate(template) {
 			t.Errorf("Template %q should be valid but is considered invalid", template)
 		}
 	}
 }
 
-func TestInvalidNegTemplate(t *testing.T) {
+func TestInvalidServiceTemplate(t *testing.T) {
 	invalidTemplates := []string{"{namespace", "", "-", "{has}", "{name}--{port}", "{namespace};{name};{port};{hash}"}
 	for _, template := range invalidTemplates {
-		if IsValidNEGTemplate(template) {
+		if IsValidServiceNameTemplate(template) {
 			t.Errorf("Template %q should be invalid but is considered valid", template)
 		}
 	}
 }
 
-func TestLongNegGenerationWithoutHash(t *testing.T) {
-	negName := generateNegName("longlonglonglonglonglonglongnamespace", "longlonglonglonglonglongname", "8080", "{namespace}-{name}-{port}")
-	expectedNegName := "longlonglonglonglonglonglongnames-longlonglonglonglonglongn-808"
-	if negName != expectedNegName {
-		t.Errorf("negName = %q, expect %q", negName, expectedNegName)
+func TestLongServiceGenerationWithoutHash(t *testing.T) {
+	serviceName := generateServiceName("longlonglonglonglonglonglongnamespace", "longlonglonglonglonglongname", "8080", "{namespace}-{name}-{port}")
+	expectedServiceName := "longlonglonglonglonglonglongnames-longlonglonglonglonglongn-808"
+	if serviceName != expectedServiceName {
+		t.Errorf("serviceName = %q, expect %q", serviceName, expectedServiceName)
 	}
-	if len(negName) != 63 {
-		t.Errorf("max neg name length should be 63 but is %q", len(negName))
+	if len(serviceName) != 63 {
+		t.Errorf("max service name length should be 63 but is %q", len(serviceName))
 	}
 }
 
-func TestLongNegGenerationWithMultipleHashes(t *testing.T) {
-	negName := generateNegName("longlonglonglongnamespace", "longlonglongname", "8080", "{hash}-{namespace}-{name}-{port}-{hash}")
+func TestLongServiceGenerationWithMultipleHashes(t *testing.T) {
+	serviceName := generateServiceName("longlonglonglongnamespace", "longlonglongname", "8080", "{hash}-{namespace}-{name}-{port}-{hash}")
 	hash := hash("longlonglonglongnamespace-longlonglongname-8080")
-	expectedNegName := hash + "-longlonglonglongnamespac-longlonglongname-808-" + hash
-	if negName != expectedNegName {
-		t.Errorf("negName = %q, expect %q", negName, expectedNegName)
+	expectedServiceName := hash + "-longlonglonglongnamespac-longlonglongname-808-" + hash
+	if serviceName != expectedServiceName {
+		t.Errorf("serviceName = %q, expect %q", serviceName, expectedServiceName)
 	}
-	if len(negName) != 63 {
-		t.Errorf("max neg name length should be 63 but is %q", len(negName))
+	if len(serviceName) != 63 {
+		t.Errorf("max service name length should be 63 but is %q", len(serviceName))
 	}
 }
 
-func TestNegGenerationWithoutHash(t *testing.T) {
-	negName := generateNegName("namespace", "name", "8080", "{name}-{port}")
-	expectedNegName := "name-8080"
-	if negName != expectedNegName {
-		t.Errorf("negName = %q, expect %q", negName, expectedNegName)
+func TestServiceGenerationWithoutHash(t *testing.T) {
+	serviceName := generateServiceName("namespace", "name", "8080", "{name}-{port}")
+	expectedServiceName := "name-8080"
+	if serviceName != expectedServiceName {
+		t.Errorf("serviceName = %q, expect %q", serviceName, expectedServiceName)
 	}
 }
 
