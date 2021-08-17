@@ -22,15 +22,15 @@ import (
 	"strings"
 )
 
-var maxNEGNameLength = 63
+var maxNameLength = 63
 
-// Validates the given negNameTemplate
+// Validates the given serviceNameTemplate
 // A template should only contain {namespace}, {name}, {port} or {hash} separated by hyphens
-func IsValidNEGTemplate(negNameTemplate string) bool {
-	if negNameTemplate == "" {
+func IsValidServiceNameTemplate(serviceNameTemplate string) bool {
+	if serviceNameTemplate == "" {
 		return false
 	}
-	for _, tag := range strings.Split(negNameTemplate, "-") {
+	for _, tag := range strings.Split(serviceNameTemplate, "-") {
 		if tag != "{namespace}" && tag != "{name}" && tag != "{port}" && tag != "{hash}" {
 			return false
 		}
@@ -38,17 +38,17 @@ func IsValidNEGTemplate(negNameTemplate string) bool {
 	return true
 }
 
-// NEG returns backend neg name based on the service namespace, name
+// The method returns backend service name based on the service namespace, name
 // or target port following the given neg name template.
 //
 // Output name is at most 63 characters.
-func generateNegName(namespace string, name string, portStr string, negNameTemplate string) string {
-	negString := strings.Join([]string{namespace, name, portStr}, "-")
-	negHash := fmt.Sprintf("%x", sha256.Sum256([]byte(negString)))[:8]
-	negTemplateTags := strings.Split(negNameTemplate, "-")
+func generateServiceName(namespace string, name string, portStr string, serviceNameTemplate string) string {
+	nameString := strings.Join([]string{namespace, name, portStr}, "-")
+	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(nameString)))[:8]
+	serviceTemplateTags := strings.Split(serviceNameTemplate, "-")
 
 	var fieldsToTruncate []string
-	for _, field := range negTemplateTags {
+	for _, field := range serviceTemplateTags {
 		switch field {
 		case "{namespace}":
 			fieldsToTruncate = append(fieldsToTruncate, namespace)
@@ -59,16 +59,16 @@ func generateNegName(namespace string, name string, portStr string, negNameTempl
 		}
 	}
 
-	// maxNEGNameLength is the max length for neg without hyphens and hash (8). 63 - hashlength - numberOfHyphens
-	maxNegLengthWoHash := maxNEGNameLength - strings.Count(negNameTemplate, "{hash}")*8 - strings.Count(negNameTemplate, "-")
+	// maxNameLength is the max length of service name without hyphens and hash (8). 63 - hashlength - numberOfHyphens
+	maxNegLengthWoHash := maxNameLength - strings.Count(serviceNameTemplate, "{hash}")*8 - strings.Count(serviceNameTemplate, "-")
 	truncFields := TrimFieldsEvenly(maxNegLengthWoHash, fieldsToTruncate...)
 
 	// form the final neg name string with hash
 	var fields []string
 	indexTruncFields := 0
-	for _, field := range negTemplateTags {
+	for _, field := range serviceTemplateTags {
 		if field == "{hash}" {
-			fields = append(fields, negHash)
+			fields = append(fields, hash)
 		} else {
 			fields = append(fields, truncFields[indexTruncFields])
 			indexTruncFields++
