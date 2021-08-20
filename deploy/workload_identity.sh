@@ -16,7 +16,11 @@
 gcloud iam service-accounts create autoneg-system --display-name "autoneg"
 gcloud iam service-accounts add-iam-policy-binding \
   --role roles/iam.workloadIdentityUser \
+<<<<<<< HEAD
   --member "serviceAccount:${PROJECT_ID}.svc.id.goog[autoneg-system/autoneg]" \
+=======
+  --member "serviceAccount:${PROJECT_ID}.svc.id.goog[autoneg-system/autoneg-controller-manager]" \
+>>>>>>> 1aa1f8c (Upgrade project to kubebuilder v3)
   autoneg-system@${PROJECT_ID}.iam.gserviceaccount.com
 
 gcloud iam roles create autoneg --project ${PROJECT_ID} \

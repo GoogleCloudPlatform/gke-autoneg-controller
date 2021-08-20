@@ -1,4 +1,4 @@
-# Copyright 2019 Google LLC
+# Copyright 2021 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -42,9 +42,24 @@ spec:
       - command:
         - /manager
         args:
-        - --enable-leader-election
+        - --leader-elect
         image: controller:latest
         name: manager
+        securityContext:
+          privileged: false
+          allowPrivilegeEscalation: false
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
         resources:
           limits:
             cpu: 100m
@@ -52,7 +67,5 @@ spec:
           requests:
             cpu: 100m
             memory: 20Mi
-        securityContext:
-          privileged: false
-          allowPrivilegeEscalation: false
+      serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

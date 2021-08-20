@@ -1,5 +1,5 @@
 /*
-Copyright 2019-2021 Google LLC.
+Copyright 2021 Google LLC.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,33 +22,42 @@ import (
 	"errors"
 	"reflect"
 
-	"github.com/go-logr/logr"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 // ServiceReconciler reconciles a Service object
 type ServiceReconciler struct {
 	client.Client
+	Scheme *runtime.Scheme
 	*BackendController
 	Recorder            record.EventRecorder
-	Log                 logr.Logger
 	ServiceNameTemplate string
 	AllowServiceName    bool
 }
 
-// +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;update;patch
-// +kubebuilder:rbac:groups=core,resources=services/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+//+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=core,resources=services/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=core,resources=services/finalizers,verbs=update
+//+kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
-func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
-	logger := r.Log.WithValues("service", req.NamespacedName)
+// Reconcile is part of the main kubernetes reconciliation loop which aims to
+// move the current state of the cluster closer to the desired state.
+// TODO(user): Modify the Reconcile function to compare the state specified by
+// the Service object against the actual cluster state, and then
+// perform operations to make the cluster state reflect the state specified by
+// the user.
+//
+// For more details, check Reconcile and its Result here:
+// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
+func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	logger := log.FromContext(ctx).WithValues("service", req.NamespacedName)
 
 	svc := &corev1.Service{}
 	err := r.Get(ctx, req.NamespacedName, svc)
@@ -171,6 +180,7 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return reconcile.Result{}, nil
 }
 
+// SetupWithManager sets up the controller with the Manager.
 func (r *ServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Service{}).

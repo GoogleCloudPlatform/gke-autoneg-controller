@@ -3,7 +3,7 @@ module github.com/GoogleCloudPlatform/gke-autoneg-controller
 go 1.18
 
 require (
-	cloud.google.com/go v0.38.0
+	cloud.google.com/go v0.54.0
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/go-logr/logr v0.1.0
 	github.com/onsi/ginkgo v1.8.0

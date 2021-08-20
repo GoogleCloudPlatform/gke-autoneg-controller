@@ -1,4 +1,4 @@
-# Copyright 2019 Google LLC
+# Copyright 2021 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -31,16 +31,21 @@ rules:
   - patch
   - delete
 - apiGroups:
-  - ""
+  - coordination.k8s.io
   resources:
-  - configmaps/status
+  - leases
   verbs:
   - get
+  - list
+  - watch
+  - create
   - update
   - patch
+  - delete
 - apiGroups:
   - ""
   resources:
   - events
   verbs:
   - create
+  - patch
