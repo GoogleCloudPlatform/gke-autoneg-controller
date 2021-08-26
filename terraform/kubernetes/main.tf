@@ -62,10 +62,11 @@ resource "kubernetes_role" "role_autoneg_leader_election_role" {
     resources  = ["configmaps"]
     verbs      = ["get", "list", "watch", "create", "update", "patch", "delete"]
   }
+
   rule {
-    api_groups = [""]
-    resources  = ["configmaps/status"]
-    verbs      = ["get", "update", "patch"]
+    api_groups = ["coordination.k8s.io"]
+    resources  = ["leases"]
+    verbs      = ["get", "list", "watch", "create", "update", "patch", "delete"]
   }
 
   rule {
@@ -98,8 +99,29 @@ resource "kubernetes_cluster_role" "clusterrole_autoneg_manager_role" {
 
   rule {
     api_groups = [""]
+    resources  = ["services/finalizers"]
+    verbs      = ["update"]
+  }
+
+  rule {
+    api_groups = [""]
     resources  = ["services/status"]
     verbs      = ["get", "patch", "update"]
+  }
+}
+
+resource "kubernetes_cluster_role" "clusterrole_autoneg_metrics_reader" {
+  metadata {
+    name = "autoneg-metrics-reader"
+
+    labels = {
+      app = "autoneg"
+    }
+  }
+
+  rule {
+    non_resource_urls = ["/metrics"]
+    verbs             = ["get"]
   }
 }
 
@@ -189,6 +211,32 @@ resource "kubernetes_cluster_role_binding" "clusterrolebinding_autoneg_proxy_rol
   }
 }
 
+resource "kubernetes_config_map" "example" {
+  metadata {
+    namespace = kubernetes_namespace.namespace_autoneg_system.metadata[0].name
+    name = "autoneg-manager-config"
+    labels = {
+      app = "autoneg"
+    }
+  }
+
+  data = {
+    "controller_manager_config.yaml" = <<-EOT
+    apiVersion: controller-runtime.sigs.k8s.io/v1alpha1
+    kind: ControllerManagerConfig
+    health:
+      healthProbeBindAddress: :8081
+    metrics:
+      bindAddress: 127.0.0.1:8080
+    webhook:
+      port: 9443
+    leaderElection:
+      leaderElect: true
+      resourceName: 9fe89c94.controller.autoneg.dev
+    EOT
+  }
+}
+
 resource "kubernetes_service" "service_autoneg_controller_manager_metrics_service" {
   metadata {
     annotations = {
@@ -250,24 +298,45 @@ resource "kubernetes_deployment" "deployment_autoneg_controller_manager" {
 
       spec {
         service_account_name             = kubernetes_service_account.service_account.metadata[0].name
-        automount_service_account_token  = true
         termination_grace_period_seconds = 10
         node_selector = {
           "iam.gke.io/gke-metadata-server-enabled" = "true"
         }
+
+        security_context {
+          run_as_non_root = true
+        }
+
         container {
           name = "manager"
 
           image             = var.controller_image
           image_pull_policy = var.image_pull_policy
 
-          args    = ["--metrics-addr=127.0.0.1:8080", "--enable-leader-election"]
+          args    = ["--health-probe-bind-address=:8081", "--metrics-bind-address=127.0.0.1:8080", "--leader-elect"]
           command = ["/manager"]
 
           security_context {
-            run_as_non_root            = true
             allow_privilege_escalation = false
             privileged                 = false
+          }
+
+          liveness_probe {
+            http_get {
+              path = "/healthz"
+              port = 8081
+            }
+            initial_delay_seconds = 15
+            period_seconds        = 20
+          }
+
+          readiness_probe {
+            http_get {
+              path = "/readyz"
+              port = 8081
+            }
+            initial_delay_seconds = 5
+            period_seconds        = 10
           }
 
           resources {
@@ -289,6 +358,11 @@ resource "kubernetes_deployment" "deployment_autoneg_controller_manager" {
           image_pull_policy = var.image_pull_policy
 
           args = ["--secure-listen-address=0.0.0.0:8443", "--upstream=http://127.0.0.1:8080/", "--logtostderr=true", "--v=10"]
+
+          security_context {
+            allow_privilege_escalation = false
+            privileged                 = false
+          }
 
           port {
             container_port = 8443

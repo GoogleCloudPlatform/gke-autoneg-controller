@@ -35,8 +35,9 @@ jobs:
 
     - name: Test
       run: |
-        sudo mkdir -p /usr/local/kubebuilder
-        curl -Ls https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.3.2/kubebuilder_2.3.2_linux_amd64.tar.gz | sudo tar -xvz --strip-components=1 -C /usr/local/kubebuilder -f - 
+        curl -Ls https://github.com/kubernetes-sigs/kubebuilder/releases/download/v3.1.0/kubebuilder_linux_amd64 -o /var/tmp/kubebuilder
+        chmod +x /var/tmp/kubebuilder
+        sudo mv /var/tmp/kubebuilder /usr/local/bin/
         make test
 
     - name: Login to GitHub Container Registry
