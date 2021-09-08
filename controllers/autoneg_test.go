@@ -209,7 +209,7 @@ var oldStatusTests = []struct {
 
 func TestGetStatuses(t *testing.T) {
 	for _, st := range statusTests {
-		_, valid, err := getStatuses("ns", "test", st.annotations, "{namespace}-{name}-{port}-{hash}")
+		_, valid, err := getStatuses("ns", "test", st.annotations, "{namespace}-{name}-{port}-{hash}", true)
 		if err != nil && !st.err {
 			t.Errorf("Set %q: expected no error, got one: %v", st.name, err)
 		}
@@ -227,7 +227,7 @@ func TestGetStatuses(t *testing.T) {
 
 func TestGetOldStatuses(t *testing.T) {
 	for _, st := range oldStatusTests {
-		_, valid, err := getStatuses("ns", "test", st.annotations, "{namespace}-{name}-{port}-{hash}")
+		_, valid, err := getStatuses("ns", "test", st.annotations, "{namespace}-{name}-{port}-{hash}", true)
 		if err != nil && !st.err {
 			t.Errorf("Set %q: expected no error, got one: %v", st.name, err)
 		}
@@ -240,6 +240,36 @@ func TestGetOldStatuses(t *testing.T) {
 		if valid && !st.valid {
 			t.Errorf("Set %q: expected no autoneg config, got one", st.name)
 		}
+	}
+}
+
+func TestGetStatusesServiceNameNotAllowed(t *testing.T) {
+	validConf := `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":100}]}}`
+	statuses, valid, err := getStatuses("ns", "test", map[string]string{autonegAnnotation: validConf}, "{namespace}-{name}-{port}", false)
+	if err != nil {
+		t.Errorf("Expected no error, got one: %v", err)
+	}
+	if !valid {
+		t.Errorf("Expected autoneg config, got none")
+	}
+	_, ok := statuses.config.BackendServices["80"]["ns-test-80"]
+	if !ok {
+		t.Errorf("Expected service config for ns-test-80 but got none, service statuses: \n%v", statuses.config.BackendServices)
+	}
+}
+
+func TestGetStatusesServiceNameAllowed(t *testing.T) {
+	validConf := `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":100}]}}`
+	statuses, valid, err := getStatuses("ns", "test", map[string]string{autonegAnnotation: validConf}, "{namespace}-{name}-{port}", true)
+	if err != nil {
+		t.Errorf("Expected no error, got one: %v", err)
+	}
+	if !valid {
+		t.Errorf("Expected autoneg config, got none")
+	}
+	_, ok := statuses.config.BackendServices["80"]["http-be"]
+	if !ok {
+		t.Errorf("Expected service config for http-be but got none, service statuses: \n%v", statuses.config.BackendServices)
 	}
 }
 
