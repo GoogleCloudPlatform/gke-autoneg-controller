@@ -60,7 +60,7 @@ func main() {
 	flag.StringVar(&serviceNameTemplate, "default-backendservice-name", "{name}-{port}",
 		"A naming template consists of {namespace}, {name}, {port} or {hash} separated by hyphens, "+
 			"where {hash} is the first 8 digits of a hash of other given information")
-	flag.BoolVar(&allowServiceName, "allow-service-name", true, "Enable setting custom service name in autoneg annotation.")
+	flag.BoolVar(&allowServiceName, "enable-supplied-service-names", true, "Enable using custom service names in autoneg annotation.")
 	flag.Parse()
 
 	ctrl.SetLogger(zap.Logger(true))

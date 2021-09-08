@@ -42,7 +42,7 @@ Specify options to configure the backends representing the NEGs that will be ass
 ### Options
 
 * `name`: optional. The name of the backend service to register backends with. Defaults to a value generated using the given template.
-   * If `--allow-service-name` flag (defaults to `true`) is set to `false`, the `name` values specified in new autoneg annotations would be invalidated and fall back to the template generated names.
+   * If `--enable-supplied-service-names` flag (defaults to `true`) is set to `false`, the `name` values specified in new autoneg annotations would be invalidated and fall back to the template generated names.
    * The default name value for old `anthos.cft.dev/autoneg` annotation is service name.
 * `region`: optional. Used to specify that this is a regional backend service.
 * `max_rate_per_endpoint`: required/optional. Integer representing the maximum rate a pod can handle. Pick either rate or connection.
