@@ -43,7 +43,8 @@ func IsValidServiceNameTemplate(serviceNameTemplate string) bool {
 //
 // Output name is at most 63 characters.
 func generateServiceName(namespace string, name string, portStr string, serviceNameTemplate string) string {
-	nameString := strings.Join([]string{namespace, name, portStr}, "-")
+	// The delimeter must be a character prohibited in kubernetes object names!
+	nameString := strings.Join([]string{namespace, name, portStr}, ";")
 	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(nameString)))[:8]
 	serviceTemplateTags := strings.Split(serviceNameTemplate, "-")
 

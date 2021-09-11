@@ -27,7 +27,7 @@ var serviceNameTemplate = "{namespace}-{name}-{port}-{hash}"
 func TestServiceNameGeneration(t *testing.T) {
 
 	serviceName := generateServiceName("ns", "name", "8080", serviceNameTemplate)
-	expectedServiceName := "ns-name-8080-" + hash("ns-name-8080")
+	expectedServiceName := "ns-name-8080-" + hash("ns;name;8080")
 	if serviceName != expectedServiceName {
 		t.Errorf("serviceName = %q, expect %q", serviceName, expectedServiceName)
 	}
@@ -36,7 +36,7 @@ func TestServiceNameGeneration(t *testing.T) {
 func TestLongServiceNameGeneration(t *testing.T) {
 
 	serviceName := generateServiceName("longlonglonglonglonglonglongnamespace", "longlonglongname", "8080", serviceNameTemplate)
-	expectedServiceName := "longlonglonglonglonglonglongnamesp-longlonglongnam-808-" + hash("longlonglonglonglonglonglongnamespace-longlonglongname-8080")
+	expectedServiceName := "longlonglonglonglonglonglongnamesp-longlonglongnam-808-" + hash("longlonglonglonglonglonglongnamespace;longlonglongname;8080")
 	if serviceName != expectedServiceName {
 		t.Errorf("serviceName = %q, expect %q", serviceName, expectedServiceName)
 	}
@@ -49,6 +49,16 @@ func TestLongServiceNamesHaveDifferentHashes(t *testing.T) {
 
 	serviceName1 := generateServiceName("longlonglonglonglonglonglongnamespace1", "longlonglongname", "8080", serviceNameTemplate)
 	serviceName2 := generateServiceName("longlonglonglonglonglonglongnamespace2", "longlonglongname", "8080", serviceNameTemplate)
+	if serviceName1 == serviceName2 {
+		t.Errorf("serviceName1 should be different from serviceName2, but both are %q", serviceName1)
+	}
+}
+
+func TestNamespaceAndServiceConflictHaveDifferentHashes(t *testing.T) {
+	// For a template like {namespace}-{name}-{port} without a hash, both of these would become:
+	// name-name-name-8080
+	serviceName1 := generateServiceName("name-name", "name", "8080", serviceNameTemplate)
+	serviceName2 := generateServiceName("name", "name-name", "8080", serviceNameTemplate)
 	if serviceName1 == serviceName2 {
 		t.Errorf("serviceName1 should be different from serviceName2, but both are %q", serviceName1)
 	}
@@ -85,7 +95,7 @@ func TestLongServiceGenerationWithoutHash(t *testing.T) {
 
 func TestLongServiceGenerationWithMultipleHashes(t *testing.T) {
 	serviceName := generateServiceName("longlonglonglongnamespace", "longlonglongname", "8080", "{hash}-{namespace}-{name}-{port}-{hash}")
-	hash := hash("longlonglonglongnamespace-longlonglongname-8080")
+	hash := hash("longlonglonglongnamespace;longlonglongname;8080")
 	expectedServiceName := hash + "-longlonglonglongnamespac-longlonglongname-808-" + hash
 	if serviceName != expectedServiceName {
 		t.Errorf("serviceName = %q, expect %q", serviceName, expectedServiceName)
