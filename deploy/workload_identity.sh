@@ -16,7 +16,7 @@
 gcloud iam service-accounts create autoneg-system --display-name "autoneg"
 gcloud iam service-accounts add-iam-policy-binding \
   --role roles/iam.workloadIdentityUser \
-  --member "serviceAccount:${PROJECT_ID}.svc.id.goog[autoneg-system/default]" \
+  --member "serviceAccount:${PROJECT_ID}.svc.id.goog[autoneg-system/autoneg]" \
   autoneg-system@${PROJECT_ID}.iam.gserviceaccount.com
 
 gcloud iam roles create autoneg --project ${PROJECT_ID} \
