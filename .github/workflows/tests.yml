@@ -1,0 +1,50 @@
+# Copyright 2022 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: "Tests"
+on:
+  schedule:
+    - cron: "45 2 * * *"
+  pull_request:
+    branches:
+      - master
+    tags:
+      - ci
+      - test
+
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.16
+
+      - name: Get version number
+        run: |
+          if [[ "$GITHUB_REF" == "refs/tags/"* ]]; then
+            echo "VERSION=${GITHUB_REF##*/}" >> $GITHUB_ENV
+          else
+            echo "VERSION=latest" >> $GITHUB_ENV
+          fi
+
+      - name: Test
+        run: |
+          sudo mkdir -p /usr/local/kubebuilder
+          curl -Ls https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.3.2/kubebuilder_2.3.2_linux_amd64.tar.gz | sudo tar -xvz --strip-components=1 -C /usr/local/kubebuilder -f - 
+          make test
