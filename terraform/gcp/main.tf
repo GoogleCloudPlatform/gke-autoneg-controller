@@ -25,8 +25,8 @@ terraform {
 resource "google_service_account" "autoneg" {
   project = var.project_id
 
-  account_id   = "gitlab-autoneg"
-  display_name = "GitLab Autoneg service account"
+  account_id   = "autoneg"
+  display_name = "Autoneg service account"
 }
 
 resource "google_project_iam_custom_role" "autoneg_role" {
