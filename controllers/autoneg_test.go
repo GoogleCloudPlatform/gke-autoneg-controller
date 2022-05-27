@@ -522,6 +522,13 @@ var reconcileTests = []struct {
 		backendsMultiChangeFirstWithNEGsRemoves,
 		backendsMultiChangeFirstWithNEGs,
 	},
+	{
+		"basic to empty config",
+		statusBasicWithNEGs,
+		statusEmpty,
+		backendsBasicWithNEGs,
+		backendsEmpty,
+	},
 
 	// {
 	// 	"basic to name changed",

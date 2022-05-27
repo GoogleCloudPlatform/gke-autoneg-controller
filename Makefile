@@ -55,16 +55,17 @@ api:
 	mkdir api
 
 # Build the docker image
+DOCKER_BIN ?= docker
 VERSION ?= latest
 LABELS ?= --label org.opencontainers.image.licenses="Apache-2.0" \
     --label org.opencontainers.image.vendor="Google LLC" \
-    --label org.opencontainers.image.version="$VERSION"
+    --label org.opencontainers.image.version="${VERSION}"
 docker-build: test api
-	docker build ${LABELS} . -t ${IMG}
+	${DOCKER_BIN} build ${LABELS} . -t ${IMG}
 
 # Push the docker image
 docker-push:
-	docker push ${IMG}
+	${DOCKER_BIN} push ${IMG}
 
 # find or download controller-gen
 # download controller-gen if necessary
@@ -89,8 +90,8 @@ autoneg-manifests: manifests
 
 # Make release image
 release-image: docker-build
-	docker tag ${IMG} ${RELEASE_IMG}:${VERSION}
+	${DOCKER_BIN} tag ${IMG} ${RELEASE_IMG}:${VERSION}
 
 # Push release image
 release-push: release-image
-	docker push ${RELEASE_IMG}:${VERSION}
+	${DOCKER_BIN} push ${RELEASE_IMG}:${VERSION}
