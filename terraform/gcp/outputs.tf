@@ -13,7 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 output "service_account_email" {
   value = google_service_account.autoneg.email
+}
+
+output "service_account" {
+  value = google_service_account.autoneg
+}
+
+output "autoneg_custom_role" {
+  value = google_project_iam_custom_role.autoneg
 }
