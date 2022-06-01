@@ -346,6 +346,25 @@ func ReconcileStatus(project string, actual AutonegStatus, intended AutonegStatu
 		}
 	}
 
+	// see if some configs were removed entirely
+	for port, _ := range actual.BackendServices {
+		if _, ok := intended.BackendServices[port]; !ok {
+			if _, ok = removes[port]; !ok {
+				removes[port] = make(map[string]Backends, len(actualBE))
+			}
+			for aname, be := range actual.BackendServices[port] {
+				remove := Backends{name: be.Name, region: be.Region}
+				remove.name = actual.BackendServices[port][aname].Name
+				remove.region = actual.BackendServices[port][aname].Region
+				for a := range actualBE[port] {
+					rbe := actual.Backend(aname, port, a)
+					remove.backends = append(remove.backends, rbe)
+				}
+				sortBackends(&remove.backends)
+				removes[port][aname] = remove
+			}
+		}
+	}
 	return
 }
 
