@@ -37,11 +37,14 @@ variable "shared_vpc" {
 
 variable "workload_identity" {
   description = "Workload identity configuration"
-  default     = null
   type = object({
     namespace       = string
     service_account = string
   })
+  default = {
+    namespace       = "autoneg-system"
+    service_account = "autoneg"
+  }
 }
 
 variable "regional" {

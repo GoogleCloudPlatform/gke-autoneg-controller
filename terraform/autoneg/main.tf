@@ -44,6 +44,8 @@ module "gcp" {
   source = "../gcp"
 
   project_id = var.project_id
+
+  workload_identity = var.workload_identity
 }
 
 module "kubernetes" {
@@ -55,4 +57,5 @@ module "kubernetes" {
   kube_rbac_proxy_image = var.kube_rbac_proxy_image
 
   service_account_email = module.gcp.service_account_email
+  workload_identity     = var.workload_identity
 }

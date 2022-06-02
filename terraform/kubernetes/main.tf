@@ -22,7 +22,6 @@ terraform {
   }
 }
 
-
 resource "kubernetes_namespace" "namespace_autoneg_system" {
   metadata {
     labels = {
@@ -30,21 +29,21 @@ resource "kubernetes_namespace" "namespace_autoneg_system" {
       control-plane = "controller-manager"
     }
 
-    name = "autoneg-system"
+    name = var.workload_identity != null ? var.workload_identity.namespace : var.namespace
   }
 }
 
 resource "kubernetes_service_account" "service_account" {
   metadata {
     namespace = kubernetes_namespace.namespace_autoneg_system.metadata[0].name
-    name      = "autoneg"
+    name      = var.workload_identity != null ? var.workload_identity.service_account : var.service_account_id
     labels = {
       app = "autoneg"
     }
 
-    annotations = {
+    annotations = var.workload_identity != null ? {
       "iam.gke.io/gcp-service-account" = var.service_account_email
-    }
+    } : {}
   }
 }
 

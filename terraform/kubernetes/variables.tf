@@ -40,3 +40,27 @@ variable "service_account_email" {
   type        = string
   description = "Autoneg service account email"
 }
+
+variable "namespace" {
+  type        = string
+  description = "Autoneg namespace"
+  default     = "autoneg-system"
+}
+
+variable "service_account_id" {
+  type        = string
+  description = "Autoneg service account"
+  default     = "autoneg"
+}
+
+variable "workload_identity" {
+  description = "Workload identity configuration"
+  type = object({
+    namespace       = string
+    service_account = string
+  })
+  default = {
+    namespace       = "autoneg-system"
+    service_account = "autoneg"
+  }
+}

@@ -13,14 +13,3 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-output "service_account_email" {
-  value = var.workload_identity != null ? google_service_account.autoneg[0].email : null
-}
-
-output "service_account" {
-  value = var.workload_identity != null ? google_service_account.autoneg[0] : null
-}
-
-output "autoneg_custom_role" {
-  value = google_project_iam_custom_role.autoneg
-}
