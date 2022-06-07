@@ -36,3 +36,15 @@ variable "kube_rbac_proxy_image" {
   description = "kuber-rbac-proxy container image"
   default     = "gcr.io/kubebuilder/kube-rbac-proxy:v0.8.0"
 }
+
+variable "workload_identity" {
+  description = "Workload identity configuration"
+  type = object({
+    namespace       = string
+    service_account = string
+  })
+  default = {
+    namespace       = "autoneg-system"
+    service_account = "autoneg"
+  }
+}

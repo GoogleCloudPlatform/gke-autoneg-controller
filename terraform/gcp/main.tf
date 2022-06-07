@@ -23,6 +23,8 @@ terraform {
 }
 
 resource "google_service_account" "autoneg" {
+  count = var.workload_identity != null ? 1 : 0
+
   project    = var.project_id
   account_id = var.service_account_id
 }
@@ -33,7 +35,7 @@ resource "google_compute_subnetwork_iam_member" "shared_vpc_user" {
   region     = var.shared_vpc.subnetwork_region
   subnetwork = var.shared_vpc.subnetwork_id
   role       = "roles/compute.networkUser"
-  member     = "serviceAccount:${google_service_account.autoneg.email}"
+  member     = "serviceAccount:${google_service_account.autoneg[0].email}"
 }
 
 locals {
@@ -61,14 +63,15 @@ resource "google_project_iam_custom_role" "autoneg" {
 }
 
 resource "google_project_iam_member" "autoneg" {
+  count   = var.workload_identity != null ? 1 : 0
   project = var.project_id
   role    = google_project_iam_custom_role.autoneg.id
-  member  = "serviceAccount:${google_service_account.autoneg.email}"
+  member  = "serviceAccount:${google_service_account.autoneg[0].email}"
 }
 
 resource "google_service_account_iam_member" "workload_identity" {
   count              = var.workload_identity != null ? 1 : 0
-  service_account_id = google_service_account.autoneg.name
+  service_account_id = google_service_account.autoneg[0].name
   role               = "roles/iam.workloadIdentityUser"
   member             = "serviceAccount:${var.project_id}.svc.id.goog[${var.workload_identity.namespace}/${var.workload_identity.service_account}]"
 }
