@@ -263,11 +263,7 @@ resource "kubernetes_deployment" "deployment_autoneg_controller_manager" {
 
           args    = ["--metrics-addr=127.0.0.1:8080", "--enable-leader-election"]
           command = ["/manager"]
-          port {
-            container_port = 8080
-            name           = "http"
-            protocol       = "TCP"
-          }
+
           security_context {
             run_as_non_root            = true
             allow_privilege_escalation = false
