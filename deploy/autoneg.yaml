@@ -220,6 +220,9 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
           privileged: false
+        ports:
+        - containerPort: 8080
+          name: http               
       - args:
         - --secure-listen-address=0.0.0.0:8443
         - --upstream=http://127.0.0.1:8080/

@@ -252,7 +252,9 @@ resource "kubernetes_deployment" "deployment_autoneg_controller_manager" {
         service_account_name             = kubernetes_service_account.service_account.metadata[0].name
         automount_service_account_token  = true
         termination_grace_period_seconds = 10
-
+        node_selector = {
+          "iam.gke.io/gke-metadata-server-enabled" = "true"
+        }
         container {
           name = "manager"
 
@@ -261,7 +263,11 @@ resource "kubernetes_deployment" "deployment_autoneg_controller_manager" {
 
           args    = ["--metrics-addr=127.0.0.1:8080", "--enable-leader-election"]
           command = ["/manager"]
-
+          port {
+            container_port = 8080
+            name           = "http"
+            protocol       = "TCP"
+          }
           security_context {
             run_as_non_root            = true
             allow_privilege_escalation = false
