@@ -115,7 +115,7 @@ Lastly, on each cluster in your project where you'd like to install `autoneg` (v
 ```
 kubectl apply -f deploy/autoneg.yaml
 
-kubectl annotate sa -n autoneg-system default \
+kubectl annotate sa -n autoneg-system autoneg \
   iam.gke.io/gcp-service-account=autoneg-system@${PROJECT_ID}.iam.gserviceaccount.com
 ```
 This will create all the Kubernetes resources required to support `autoneg` and annotate the default service account in the `autoneg-system` namespace to associate a GCP service account using [Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity). 
