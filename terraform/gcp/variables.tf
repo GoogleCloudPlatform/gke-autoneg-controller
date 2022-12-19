@@ -52,3 +52,9 @@ variable "regional" {
   default     = true
   type        = bool
 }
+
+variable "custom_role_add_random_suffix" {
+  type        = bool
+  description = "Sets random suffix at the end of the IAM custom role id"
+  default     = false
+}

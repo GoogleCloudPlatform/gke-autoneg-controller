@@ -54,9 +54,16 @@ locals {
   ) : local.zonal_permissions
 }
 
+resource "random_string" "suffix" {
+  count = var.custom_role_add_random_suffix ? 1 : 0
+
+  length  = 4
+  special = false
+}
+
 resource "google_project_iam_custom_role" "autoneg" {
   project     = var.project_id
-  role_id     = var.regional ? "autonegRegional" : "autonegZonal"
+  role_id     = "autoneg${var.regional ? "Regional" : "Zonal"}${var.custom_role_add_random_suffix ? random_string.suffix[0].result : ""}"
   title       = "${var.regional ? "Regional" : "Zonal"} AutoNEG role"
   description = "Minimum viable IAM custom role to allow AutoNEG to watch and associate NEGs created by the NEG controller to backend services"
   permissions = local.permissions
