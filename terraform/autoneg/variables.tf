@@ -48,3 +48,9 @@ variable "workload_identity" {
     service_account = "autoneg"
   }
 }
+
+variable "custom_role_add_random_suffix" {
+  type        = bool
+  description = "Sets random suffix at the end of the IAM custom role id"
+  default     = false
+}

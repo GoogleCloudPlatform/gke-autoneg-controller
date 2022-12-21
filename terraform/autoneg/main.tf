@@ -30,6 +30,8 @@ module "gcp" {
 
   project_id = var.project_id
 
+  custom_role_add_random_suffix = var.custom_role_add_random_suffix
+
   workload_identity = var.workload_identity
 }
 
