@@ -93,7 +93,7 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		intendedStatus.NEGStatus = NEGStatus{}
 	}
 
-	if reflect.DeepEqual(status.status, intendedStatus) {
+	if reflect.DeepEqual(status.status, intendedStatus) && !deleting {
 		// Equal, no reconciliation necessary
 		return reconcile.Result{}, nil
 	}
@@ -177,9 +177,7 @@ func (r *ServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-//
 // Helper functions to check and remove string from a slice of strings.
-//
 func containsString(slice []string, s string) bool {
 	for _, item := range slice {
 		if item == s {
