@@ -1,5 +1,5 @@
 /*
-Copyright 2019 Google LLC.
+Copyright 2021 Google LLC.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,17 +22,22 @@ import (
 	"fmt"
 	"os"
 
+	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
+	// to ensure that exec-entrypoint and run can make use of them.
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
+
 	"cloud.google.com/go/compute/metadata"
-	"github.com/GoogleCloudPlatform/gke-autoneg-controller/controllers"
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/option"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	// +kubebuilder:scaffold:imports
+
+	"github.com/GoogleCloudPlatform/gke-autoneg-controller/controllers"
+	//+kubebuilder:scaffold:imports
 )
 
 const useragent = "google-pso-tool/gke-autoneg-controller/0.9.7-dev"
@@ -43,27 +48,33 @@ var (
 )
 
 func init() {
-	_ = clientgoscheme.AddToScheme(scheme)
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	_ = corev1.AddToScheme(scheme)
-	// +kubebuilder:scaffold:scheme
+	//+kubebuilder:scaffold:scheme
 }
 
 func main() {
 	var metricsAddr string
+	var probeAddr string
 	var enableLeaderElection bool
 	var serviceNameTemplate string
 	var allowServiceName bool
-	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
-		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
+		"Enable leader election for controller manager. "+
+			"Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&serviceNameTemplate, "default-backendservice-name", "{name}-{port}",
 		"A naming template consists of {namespace}, {name}, {port} or {hash} separated by hyphens, "+
 			"where {hash} is the first 8 digits of a hash of other given information")
 	flag.BoolVar(&allowServiceName, "enable-custom-service-names", true, "Enable using custom service names in autoneg annotation.")
+	opts := zap.Options{
+		Development: true,
+	}
+	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
-	ctrl.SetLogger(zap.Logger(true))
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -87,9 +98,12 @@ func main() {
 	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:             scheme,
-		MetricsBindAddress: metricsAddr,
-		LeaderElection:     enableLeaderElection,
+		Scheme:                 scheme,
+		MetricsBindAddress:     metricsAddr,
+		Port:                   9443,
+		HealthProbeBindAddress: probeAddr,
+		LeaderElection:         enableLeaderElection,
+		LeaderElectionID:       "9fe89c94.controller.autoneg.dev",
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -98,16 +112,25 @@ func main() {
 
 	if err = (&controllers.ServiceReconciler{
 		Client:              mgr.GetClient(),
+		Scheme:              mgr.GetScheme(),
 		BackendController:   controllers.NewBackendController(project, s),
 		Recorder:            mgr.GetEventRecorderFor("autoneg-controller"),
-		Log:                 ctrl.Log.WithName("controllers").WithName("Service"),
 		ServiceNameTemplate: serviceNameTemplate,
 		AllowServiceName:    allowServiceName,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Service")
 		os.Exit(1)
 	}
-	// +kubebuilder:scaffold:builder
+	//+kubebuilder:scaffold:builder
+
+	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to set up health check")
+		os.Exit(1)
+	}
+	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to set up ready check")
+		os.Exit(1)
+	}
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {

@@ -1,4 +1,4 @@
-# Copyright 2019 Google LLC
+# Copyright 2021 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,7 +23,9 @@ metadata:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: autoneg
+  labels:
+    app: autoneg
+  name: autoneg-controller-manager
   namespace: autoneg-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -47,19 +49,24 @@ rules:
   - patch
   - delete
 - apiGroups:
-  - ""
+  - coordination.k8s.io
   resources:
-  - configmaps/status
+  - leases
   verbs:
   - get
+  - list
+  - watch
+  - create
   - update
   - patch
+  - delete
 - apiGroups:
   - ""
   resources:
   - events
   verbs:
   - create
+  - patch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -89,11 +96,29 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - services/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - ""
+  resources:
   - services/status
   verbs:
   - get
   - patch
   - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: autoneg
+  name: autoneg-metrics-reader
+rules:
+- nonResourceURLs:
+  - /metrics
+  verbs:
+  - get
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -128,7 +153,7 @@ roleRef:
   name: autoneg-leader-election-role
 subjects:
 - kind: ServiceAccount
-  name: autoneg
+  name: autoneg-controller-manager
   namespace: autoneg-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -143,7 +168,7 @@ roleRef:
   name: autoneg-manager-role
 subjects:
 - kind: ServiceAccount
-  name: autoneg
+  name: autoneg-controller-manager
   namespace: autoneg-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -158,16 +183,47 @@ roleRef:
   name: autoneg-proxy-role
 subjects:
 - kind: ServiceAccount
-  name: autoneg
+  name: autoneg-controller-manager
+  namespace: autoneg-system
+---
+apiVersion: v1
+data:
+  controller_manager_config.yaml: |
+    # Copyright 2021 Google LLC
+    #
+    # Licensed under the Apache License, Version 2.0 (the "License");
+    # you may not use this file except in compliance with the License.
+    # You may obtain a copy of the License at
+    #
+    #      http://www.apache.org/licenses/LICENSE-2.0
+    #
+    # Unless required by applicable law or agreed to in writing, software
+    # distributed under the License is distributed on an "AS IS" BASIS,
+    # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    # See the License for the specific language governing permissions and
+    # limitations under the License.
+
+    apiVersion: controller-runtime.sigs.k8s.io/v1alpha1
+    kind: ControllerManagerConfig
+    health:
+      healthProbeBindAddress: :8081
+    metrics:
+      bindAddress: 127.0.0.1:8080
+    webhook:
+      port: 9443
+    leaderElection:
+      leaderElect: true
+      resourceName: 9fe89c94.controller.autoneg.dev
+kind: ConfigMap
+metadata:
+  labels:
+    app: autoneg
+  name: autoneg-manager-config
   namespace: autoneg-system
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  annotations:
-    prometheus.io/port: "8443"
-    prometheus.io/scheme: https
-    prometheus.io/scrape: "true"
   labels:
     app: autoneg
     control-plane: controller-manager
@@ -204,23 +260,6 @@ spec:
     spec:
       containers:
       - args:
-        - --metrics-addr=127.0.0.1:8080
-        - --enable-leader-election
-        command:
-        - /manager
-        image: ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:v0.9.7
-        name: manager
-        resources:
-          limits:
-            cpu: 100m
-            memory: 30Mi
-          requests:
-            cpu: 100m
-            memory: 20Mi
-        securityContext:
-          allowPrivilegeEscalation: false
-          privileged: false
-      - args:
         - --secure-listen-address=0.0.0.0:8443
         - --upstream=http://127.0.0.1:8080/
         - --logtostderr=true
@@ -233,7 +272,37 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
           privileged: false
+      - args:
+        - --health-probe-bind-address=:8081
+        - --metrics-bind-address=127.0.0.1:8080
+        - --leader-elect
+        command:
+        - /manager
+        image: ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:latest
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        name: manager
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 100m
+            memory: 30Mi
+          requests:
+            cpu: 100m
+            memory: 20Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          privileged: false
       securityContext:
         runAsNonRoot: true
-      serviceAccountName: autoneg
+      serviceAccountName: autoneg-controller-manager
       terminationGracePeriodSeconds: 10
