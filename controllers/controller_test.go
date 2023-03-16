@@ -7,10 +7,8 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	apps "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -26,6 +24,15 @@ var _ = Describe("Run autoneg Controller", func() {
 	Context("Create a service resource with autoneg annotations", func() {
 
 		It("should succeed", func() {
+
+			namespace := &corev1.Namespace{
+				ObjectMeta: v1.ObjectMeta{
+					Name: "namespace",
+				},
+			}
+
+			err := k8sClient.Create(ctx, namespace)
+			Expect(err).NotTo(HaveOccurred())
 
 			annotations := make(map[string]string)
 			annotations[negAnnotation] = "{\"exposed_ports\":{\"4242\":{}}}"
@@ -48,7 +55,7 @@ var _ = Describe("Run autoneg Controller", func() {
 				},
 			}
 
-			err := k8sClient.Create(ctx, service)
+			err = k8sClient.Create(ctx, service)
 			Expect(err).NotTo(HaveOccurred(), "failed to create service resource")
 
 			createdService := &corev1.Service{}
@@ -93,19 +100,3 @@ var _ = Describe("Run autoneg Controller", func() {
 		})
 	})
 })
-
-func getResourceFunc(ctx context.Context, key client.ObjectKey, obj runtime.Object) func() error {
-	return func() error {
-		return k8sClient.Get(ctx, key, obj)
-	}
-}
-
-func getDeploymentReplicasFunc(ctx context.Context, key client.ObjectKey) func() int32 {
-	return func() int32 {
-		depl := &apps.Deployment{}
-		err := k8sClient.Get(ctx, key, depl)
-		Expect(err).NotTo(HaveOccurred(), "failed to get Deployment resource")
-
-		return *depl.Spec.Replicas
-	}
-}
