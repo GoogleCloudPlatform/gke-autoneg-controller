@@ -1,3 +1,12 @@
-version: "2"
-domain: google.com
+domain: controller.autoneg.dev
+layout:
+- go.kubebuilder.io/v3
+projectName: gke-autoneg-controller
 repo: github.com/GoogleCloudPlatform/gke-autoneg-controller
+resources:
+- controller: true
+  group: core
+  kind: Service
+  path: k8s.io/api/core/v1
+  version: v1
+version: "3"
