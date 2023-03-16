@@ -51,11 +51,15 @@ var _ = Describe("Run autoneg Controller", func() {
 			err := k8sClient.Create(ctx, service)
 			Expect(err).NotTo(HaveOccurred(), "failed to create service resource")
 
-			time.Sleep(time.Second * 5)
-
 			createdService := &corev1.Service{}
-			err = k8sClient.Get(ctx, serviceKey, createdService)
-			Expect(err).NotTo(HaveOccurred(), "failed to retrieve service resource")
+
+			Eventually(func() string {
+				err = k8sClient.Get(ctx, serviceKey, createdService)
+				Expect(err).NotTo(HaveOccurred(), "failed to retrieve service resource")
+				annos := createdService.Annotations
+				autonegStatus := annos[autonegStatusAnnotation]
+				return autonegStatus
+			}, time.Second*5, time.Second).ShouldNot(BeEmpty())
 
 			updatedAnnos := createdService.Annotations
 
@@ -76,9 +80,10 @@ var _ = Describe("Run autoneg Controller", func() {
 				err = k8sClient.Delete(ctx, createdService)
 				Expect(err).NotTo(HaveOccurred(), "failed to delete service resource")
 
-				time.Sleep(time.Second * 5)
-
-				err = k8sClient.Get(ctx, serviceKey, &corev1.Service{})
+				Eventually(func() error {
+					err = k8sClient.Get(ctx, serviceKey, &corev1.Service{})
+					return err
+				}, time.Second*5, time.Second).ShouldNot(BeNil())
 
 				var e *errNotFound
 				Expect(err).To(HaveOccurred())
