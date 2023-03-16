@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"reflect"
 
 	"github.com/go-logr/logr"
@@ -50,6 +51,7 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
 	logger := r.Log.WithValues("service", req.NamespacedName)
 
+	log.Printf("reconciling") // for debugging
 	svc := &corev1.Service{}
 	err := r.Get(ctx, req.NamespacedName, svc)
 	if err != nil {
