@@ -100,9 +100,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	if deleting {
 		intendedStatus.NEGStatus = NEGStatus{}
-	}
-
-	if reflect.DeepEqual(status.status, intendedStatus) {
+	} else if reflect.DeepEqual(status.status, intendedStatus) {
 		// Equal, no reconciliation necessary
 		return reconcile.Result{}, nil
 	}
