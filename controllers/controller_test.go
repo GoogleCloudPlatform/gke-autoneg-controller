@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"context"
-	"log"
 	"reflect"
 	"time"
 
@@ -59,7 +58,7 @@ var _ = Describe("Run autoneg Controller", func() {
 			Expect(err).NotTo(HaveOccurred(), "failed to retrieve service resource")
 
 			updatedAnnos := createdService.Annotations
-			log.Printf("%v", updatedAnnos)
+
 			Expect(updatedAnnos[autonegStatusAnnotation]).To(Equal(
 				"{\"backend_services\":{\"4242\":{\"namespace-old-service-4242-de64ba2d\":" +
 					"{\"name\":\"namespace-old-service-4242-de64ba2d\",\"max_rate_per_endpoint\":4242}}}," +
