@@ -47,8 +47,10 @@ service specified in the `autoneg` configuration annotation.
 Only the NEGs created by the GKE NEG controller will be added or removed from your backend service. This mechanism should be safe to 
 use across multiple clusters.
 
-Note: `autoneg` will initialize the `capacityScaler` variable to 1 on new registrations. On any changes, `autoneg` will leave 
-whatever is set in that value. The `capacityScaler` mechanism can be used orthogonally by interactive tooling to manage 
+By default, `autoneg` will initialize the `capacityScaler` to 1, which means that the new backend will receive a proportional volume
+of traffic according to the maximum rate or connections per endpoint configuration. You can customize this default by supplying
+the `initial_capacity` variable, which may be useful to steer traffic in blue/green deployment scenarios. On any changes, `autoneg`
+will leave  whatever is set in that value. The `capacityScaler` mechanism can be used orthogonally by interactive tooling to manage 
 traffic shifting in such uses cases as deployment or failover.
 
 ## Autoneg Configuration
@@ -67,6 +69,7 @@ Specify options to configure the backends representing the NEGs that will be ass
 * `region`: optional. Used to specify that this is a regional backend service.
 * `max_rate_per_endpoint`: required/optional. Integer representing the maximum rate a pod can handle. Pick either rate or connection.
 * `max_connections_per_endpoint`: required/optional. Integer representing the maximum amount of connections a pod can handle. Pick either rate or connection.
+* `initial_capacity`: optional. Integer configuring the initial capacityScaler, expressed as a percentage between 0 and 100. If set to 0, the backend service will not receive any traffic until an operator or other service adjusts the [capacity scaler setting](https://cloud.google.com/load-balancing/docs/backend-service#capacity_scaler).
 
 ### Controller parameters
 

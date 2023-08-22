@@ -1,5 +1,5 @@
 /*
-Copyright 2019-2021 Google LLC.
+Copyright 2019-2023 Google LLC.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,18 +17,21 @@ limitations under the License.
 package controllers
 
 import (
+	"math"
 	"reflect"
 	"testing"
 
 	"google.golang.org/api/compute/v1"
+	"k8s.io/utils/pointer"
 )
 
 var (
-	malformedJSON     = `{`
-	validConfig       = `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":100}],"443":[{"name":"https-be","max_connections_per_endpoint":1000}]}}`
-	brokenConfig      = `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":"100"}],"443":[{"name":"https-be","max_connections_per_endpoint":1000}}}`
-	validMultiConfig  = `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":100},{"name":"http-ilb-be","max_rate_per_endpoint":100}],"443":[{"name":"https-be","max_connections_per_endpoint":1000},{"name":"https-ilb-be","max_connections_per_endpoint":1000}]}}`
-	validConfigWoName = `{"backend_services":{"80":[{"max_rate_per_endpoint":100}],"443":[{"max_connections_per_endpoint":1000}]}}`
+	malformedJSON         = `{`
+	validConfig           = `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":100,"initial_capacity":100}],"443":[{"name":"https-be","max_connections_per_endpoint":1000,"initial_capacity":0}]}}`
+	brokenConfig          = `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":"100"}],"443":[{"name":"https-be","max_connections_per_endpoint":1000}}}`
+	validMultiConfig      = `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":100},{"name":"http-ilb-be","max_rate_per_endpoint":100}],"443":[{"name":"https-be","max_connections_per_endpoint":1000},{"name":"https-ilb-be","max_connections_per_endpoint":1000}]}}`
+	validConfigWoName     = `{"backend_services":{"80":[{"max_rate_per_endpoint":100}],"443":[{"max_connections_per_endpoint":1000}]}}`
+	invalidCapacityConfig = `{"backend_services":{"443":[{"max_connections_per_endpoint":1000,"initial_capacity":500}]}}`
 
 	validStatus        = `{}`
 	validAutonegConfig = `{}`
@@ -80,6 +83,14 @@ var statusTests = []struct {
 		false,
 	},
 	{
+		"valid multi autoneg",
+		map[string]string{
+			autonegAnnotation: validMultiConfig,
+		},
+		true,
+		false,
+	},
+	{
 		"valid autoneg with invalid status",
 		map[string]string{
 			autonegAnnotation:       validConfig,
@@ -110,6 +121,24 @@ var statusTests = []struct {
 		"valid autoneg without neg name",
 		map[string]string{
 			autonegAnnotation:   validConfigWoName,
+			negStatusAnnotation: validStatus,
+		},
+		true,
+		false,
+	},
+	{
+		"invalid capacity config with valid neg status",
+		map[string]string{
+			autonegAnnotation:   invalidCapacityConfig,
+			negStatusAnnotation: validStatus,
+		},
+		true,
+		true,
+	},
+	{
+		"valid autoneg config with valid neg status",
+		map[string]string{
+			autonegAnnotation:   validAutonegConfig,
 			negStatusAnnotation: validStatus,
 		},
 		true,
@@ -273,26 +302,145 @@ func TestGetStatusesServiceNameAllowed(t *testing.T) {
 	}
 }
 
-var configTests = []struct {
-	name   string
-	config OldAutonegConfig
-	err    bool
-}{
-	{
-		"default config",
-		OldAutonegConfig{},
-		false,
-	},
-}
+func TestValidateOldConfig(t *testing.T) {
+	tests := []struct {
+		name   string
+		config OldAutonegConfig
+		err    bool
+	}{
+		{
+			"default config",
+			OldAutonegConfig{},
+			false,
+		},
+	}
 
-func TestValidateConfig(t *testing.T) {
-	for _, ct := range configTests {
+	for _, ct := range tests {
 		err := validateOldConfig(ct.config)
 		if err == nil && ct.err {
 			t.Errorf("Set %q: expected error, got none", ct.name)
 		}
 		if err != nil && !ct.err {
 			t.Errorf("Set %q: expected no error, got one: %v", ct.name, err)
+		}
+	}
+}
+
+func TestValidateNewConfig(t *testing.T) {
+	tests := []struct {
+		name                   string
+		config                 AutonegConfig
+		err                    bool
+		expectedCapacityScaler float64
+	}{
+		{
+			name:                   "default config",
+			config:                 AutonegConfig{},
+			err:                    false,
+			expectedCapacityScaler: 1,
+		},
+		{
+			name: "negative initial_capacity",
+			config: AutonegConfig{
+				BackendServices: map[string]map[string]AutonegNEGConfig{
+					"80": {
+						"http-be": {
+							Name:            "http-be",
+							Connections:     100,
+							InitialCapacity: pointer.Int32Ptr(int32(-10)),
+						},
+					},
+				},
+			},
+			err:                    true,
+			expectedCapacityScaler: 1,
+		},
+		{
+			name: "large initial capacity",
+			config: AutonegConfig{
+				BackendServices: map[string]map[string]AutonegNEGConfig{
+					"80": {
+						"http-be": {
+							Name:            "http-be",
+							Connections:     100,
+							InitialCapacity: pointer.Int32Ptr(int32(5000)),
+						},
+					},
+				},
+			},
+			err:                    true,
+			expectedCapacityScaler: 1,
+		},
+		{
+			name: "zero initial capacity",
+			config: AutonegConfig{
+				BackendServices: map[string]map[string]AutonegNEGConfig{
+					"80": {
+						"http-be": {
+							Name:            "http-be",
+							Connections:     100,
+							InitialCapacity: pointer.Int32Ptr(int32(0)),
+						},
+					},
+				},
+			},
+			err:                    false,
+			expectedCapacityScaler: 0,
+		},
+		{
+			name: "half initial capacity",
+			config: AutonegConfig{
+				BackendServices: map[string]map[string]AutonegNEGConfig{
+					"80": {
+						"http-be": {
+							Name:            "http-be",
+							Connections:     100,
+							InitialCapacity: pointer.Int32Ptr(int32(50)),
+						},
+					},
+				},
+			},
+			err:                    false,
+			expectedCapacityScaler: 0.5,
+		},
+		{
+			name: "max initial capacity",
+			config: AutonegConfig{
+				BackendServices: map[string]map[string]AutonegNEGConfig{
+					"80": {
+						"http-be": {
+							Name:            "http-be",
+							Rate:            100,
+							InitialCapacity: pointer.Int32Ptr(int32(100)),
+						},
+					},
+				},
+			},
+			err:                    false,
+			expectedCapacityScaler: 1,
+		},
+	}
+
+	for _, ct := range tests {
+		err := validateNewConfig(ct.config)
+		if err == nil && ct.err {
+			t.Errorf("Set %q: expected error, got none", ct.name)
+		}
+		if err != nil && !ct.err {
+			t.Errorf("Set %q: expected no error, got one: %v", ct.name, err)
+		}
+
+		// The compute.Backend object should have a float64 value in
+		// the range [0.0, 1.0]
+		status := AutonegStatus{AutonegConfig: ct.config}
+		beConfig := status.Backend("http-be", "80", "group")
+		if beConfig.CapacityScaler < 0 || beConfig.CapacityScaler > 1 {
+			t.Errorf("Set %q: expected capacityScaler in [0.0, 1.0], got %f", ct.name, beConfig.CapacityScaler)
+		}
+
+		// Actual value should be within 1e-9 of expected
+		if diff := math.Abs(beConfig.CapacityScaler - ct.expectedCapacityScaler); diff > 1e-9 {
+			t.Errorf("Set %q: expected CapacityScaler of %f, got %f (diff %f)", ct.name, ct.expectedCapacityScaler, beConfig.CapacityScaler, diff)
 		}
 	}
 }

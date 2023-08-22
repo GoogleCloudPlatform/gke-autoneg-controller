@@ -1,5 +1,5 @@
 /*
-Copyright 2019-2021 Google LLC.
+Copyright 2019-2023 Google LLC.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -45,10 +45,11 @@ type AutonegConfigTemp struct {
 // AutonegConfig specifies the intended configuration of autoneg
 // stored in the controller.autoneg.dev/neg annotation
 type AutonegNEGConfig struct {
-	Name        string  `json:"name,omitempty"`
-	Region      string  `json:"region,omitempty"`
-	Rate        float64 `json:"max_rate_per_endpoint,omitempty"`
-	Connections float64 `json:"max_connections_per_endpoint,omitempty"`
+	Name            string  `json:"name,omitempty"`
+	Region          string  `json:"region,omitempty"`
+	Rate            float64 `json:"max_rate_per_endpoint,omitempty"`
+	Connections     float64 `json:"max_connections_per_endpoint,omitempty"`
+	InitialCapacity *int32  `json:"initial_capacity,omitempty"`
 }
 
 // AutonegStatus specifies the reconciled status of autoneg

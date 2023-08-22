@@ -1,5 +1,5 @@
 /*
-Copyright 2019-2021 Google LLC.
+Copyright 2019-2023 Google LLC.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -59,19 +59,33 @@ func (e *errNotFound) Error() string {
 // Backend returns a compute.Backend struct specified with a backend group
 // and the embedded AutonegConfig
 func (s AutonegStatus) Backend(name string, port string, group string) compute.Backend {
-	if s.AutonegConfig.BackendServices[port][name].Rate > 0 {
+	cfg := s.AutonegConfig.BackendServices[port][name]
+
+	// Extract initial_capacity setting, if set
+	var capacityScaler float64 = 1
+	if capacity := cfg.InitialCapacity; capacity != nil {
+		// This case should not be possible since validateNewConfig checks
+		// it, but leave the default setting of 100% if capacity is less
+		// than 0 or greater than 100
+		if *capacity >= int32(0) && *capacity <= int32(100) {
+			capacityScaler = float64(*capacity) / 100
+		}
+	}
+
+	// Prefer the rate balancing mode if set
+	if cfg.Rate > 0 {
 		return compute.Backend{
 			Group:              group,
 			BalancingMode:      "RATE",
-			MaxRatePerEndpoint: s.AutonegConfig.BackendServices[port][name].Rate,
-			CapacityScaler:     1,
+			MaxRatePerEndpoint: cfg.Rate,
+			CapacityScaler:     capacityScaler,
 		}
 	} else {
 		return compute.Backend{
 			Group:                     group,
 			BalancingMode:             "CONNECTION",
-			MaxConnectionsPerEndpoint: int64(s.AutonegConfig.BackendServices[port][name].Connections),
-			CapacityScaler:            1,
+			MaxConnectionsPerEndpoint: int64(cfg.Connections),
+			CapacityScaler:            capacityScaler,
 		}
 	}
 }
@@ -381,8 +395,16 @@ func validateOldConfig(cfg OldAutonegConfig) error {
 	return nil
 }
 
-func validateNewConfig(cfg AutonegConfig) error {
-	// do additional validation
+func validateNewConfig(config AutonegConfig) error {
+	for _, cfgs := range config.BackendServices {
+		for _, cfg := range cfgs {
+			if cfg.InitialCapacity != nil {
+				if *cfg.InitialCapacity < 0 || *cfg.InitialCapacity > 100 {
+					return fmt.Errorf("initial_capacity for backend %q must be between 0 and 100 inclusive, but was %q; see https://cloud.google.com/load-balancing/docs/backend-service#capacity_scaler for details", cfg.Name, *cfg.InitialCapacity)
+				}
+			}
+		}
+	}
 	return nil
 }
 
