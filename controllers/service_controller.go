@@ -83,7 +83,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	deleting := false
 	// Process deletion
-	if !svc.ObjectMeta.DeletionTimestamp.IsZero() && containsString(svc.ObjectMeta.Finalizers, autonegFinalizer) {
+	if !svc.ObjectMeta.DeletionTimestamp.IsZero() && (containsString(svc.ObjectMeta.Finalizers, oldAutonegFinalizer) || containsString(svc.ObjectMeta.Finalizers, autonegFinalizer)) {
 		logger.Info("Deleting service")
 		deleting = true
 	}
@@ -99,7 +99,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	if deleting {
-		intendedStatus.NEGStatus = NEGStatus{}
+		intendedStatus.BackendServices = make(map[string]map[string]AutonegNEGConfig, 0)
 	} else if reflect.DeepEqual(status.status, intendedStatus) {
 		// Equal, no reconciliation necessary
 		return reconcile.Result{}, nil
@@ -114,18 +114,31 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			r.Recorder.Event(svc, "Warning", "BackendError", err.Error())
 			return reconcile.Result{}, err
 		}
+		if deleting {
+			r.Recorder.Event(svc, "Warning", "BackendError while deleting", err.Error())
+			return reconcile.Result{}, err
+		}
 	}
 
 	// Write changes to the service object.
 	if deleting {
 		// Remove finalizer and clear status
+		svc.ObjectMeta.Finalizers = removeString(svc.ObjectMeta.Finalizers, oldAutonegFinalizer)
 		svc.ObjectMeta.Finalizers = removeString(svc.ObjectMeta.Finalizers, autonegFinalizer)
 		delete(svc.ObjectMeta.Annotations, autonegStatusAnnotation)
+		delete(svc.ObjectMeta.Annotations, oldAutonegStatusAnnotation)
 	} else {
-		// Add the finalizer annotation if it doesn't exist.
-		if !containsString(svc.ObjectMeta.Finalizers, autonegFinalizer) {
-			logger.Info("Adding finalizer")
+		// Remove old finalizer
+		if containsString(svc.ObjectMeta.Finalizers, oldAutonegFinalizer) {
+			logger.Info("Upgrading finalizer")
+			svc.ObjectMeta.Finalizers = removeString(svc.ObjectMeta.Finalizers, oldAutonegFinalizer)
 			svc.ObjectMeta.Finalizers = append(svc.ObjectMeta.Finalizers, autonegFinalizer)
+		} else {
+			// Add the finalizer annotation if it doesn't exist.
+			if !containsString(svc.ObjectMeta.Finalizers, autonegFinalizer) {
+				logger.Info("Adding finalizer")
+				svc.ObjectMeta.Finalizers = append(svc.ObjectMeta.Finalizers, autonegFinalizer)
+			}
 		}
 
 		// Write status to annotations
