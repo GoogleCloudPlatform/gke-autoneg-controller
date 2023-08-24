@@ -271,7 +271,16 @@ spec:
           name: https
         securityContext:
           allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
           privileged: false
+          readOnlyRootFilesystem: true
+          runAsUser: 65532
+          runAsGroup: 65532
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
       - args:
         - --health-probe-bind-address=:8081
         - --metrics-bind-address=127.0.0.1:8080
@@ -301,9 +310,22 @@ spec:
             memory: 20Mi
         securityContext:
           allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
           privileged: false
+          readOnlyRootFilesystem: true
+          runAsUser: 65532
+          runAsGroup: 65532
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
       securityContext:
+        runAsUser: 65532
+        runAsGroup: 65532
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       nodeSelector:
         iam.gke.io/gke-metadata-server-enabled: true
       serviceAccountName: autoneg-controller-manager
