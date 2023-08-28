@@ -212,32 +212,6 @@ resource "kubernetes_cluster_role_binding" "clusterrolebinding_autoneg_proxy_rol
   }
 }
 
-resource "kubernetes_config_map" "example" {
-  metadata {
-    namespace = kubernetes_namespace.namespace_autoneg_system.metadata[0].name
-    name      = "autoneg-manager-config"
-    labels = {
-      app = "autoneg"
-    }
-  }
-
-  data = {
-    "controller_manager_config.yaml" = <<-EOT
-    apiVersion: controller-runtime.sigs.k8s.io/v1alpha1
-    kind: ControllerManagerConfig
-    health:
-      healthProbeBindAddress: :8081
-    metrics:
-      bindAddress: 127.0.0.1:8080
-    webhook:
-      port: 9443
-    leaderElection:
-      leaderElect: true
-      resourceName: 9fe89c94.controller.autoneg.dev
-    EOT
-  }
-}
-
 resource "kubernetes_service" "service_autoneg_controller_manager_metrics_service" {
   metadata {
     annotations = {
@@ -381,4 +355,3 @@ resource "kubernetes_deployment" "deployment_autoneg_controller_manager" {
     kubernetes_cluster_role_binding.clusterrolebinding_autoneg_proxy_rolebinding,
   ]
 }
-
