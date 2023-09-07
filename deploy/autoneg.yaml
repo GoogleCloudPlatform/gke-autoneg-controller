@@ -305,6 +305,6 @@ spec:
       securityContext:
         runAsNonRoot: true
       nodeSelector:
-        iam.gke.io/gke-metadata-server-enabled: true
+        iam.gke.io/gke-metadata-server-enabled: "true"
       serviceAccountName: autoneg-controller-manager
       terminationGracePeriodSeconds: 10
