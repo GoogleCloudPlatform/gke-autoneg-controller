@@ -35,7 +35,8 @@ const (
 	autonegStatusAnnotation       = "controller.autoneg.dev/neg-status"
 	negStatusAnnotation           = "cloud.google.com/neg-status"
 	negAnnotation                 = "cloud.google.com/neg"
-	autonegFinalizer              = "anthos.cft.dev/autoneg"
+	oldAutonegFinalizer           = "anthos.cft.dev/autoneg"
+	autonegFinalizer              = "controller.autoneg.dev/neg"
 	computeOperationStatusDone    = "DONE"
 	computeOperationStatusRunning = "RUNNING"
 	computeOperationStatusPending = "PENDING"
@@ -167,6 +168,9 @@ func checkOperation(op *compute.Operation) error {
 // ReconcileBackends takes the actual and intended AutonegStatus
 // and attempts to apply the intended status or return an error
 func (b *BackendController) ReconcileBackends(actual, intended AutonegStatus) (err error) {
+	if b.s == nil { // test suite
+		return nil
+	}
 	removes, upserts := ReconcileStatus(b.project, actual, intended)
 
 	for port, _removes := range removes {

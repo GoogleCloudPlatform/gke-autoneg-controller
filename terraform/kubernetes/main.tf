@@ -17,7 +17,8 @@
 terraform {
   required_providers {
     kubernetes = {
-      source = "hashicorp/kubernetes"
+      source  = "hashicorp/kubernetes"
+      version = ">= 2.9.0"
     }
   }
 }
@@ -214,7 +215,7 @@ resource "kubernetes_cluster_role_binding" "clusterrolebinding_autoneg_proxy_rol
 resource "kubernetes_config_map" "example" {
   metadata {
     namespace = kubernetes_namespace.namespace_autoneg_system.metadata[0].name
-    name = "autoneg-manager-config"
+    name      = "autoneg-manager-config"
     labels = {
       app = "autoneg"
     }
