@@ -236,9 +236,14 @@ var oldStatusTests = []struct {
 	},
 }
 
+var serviceReconciler = ServiceReconciler{
+	ServiceNameTemplate: "{namespace}-{name}-{port}-{hash}",
+	AllowServiceName:    true,
+}
+
 func TestGetStatuses(t *testing.T) {
 	for _, st := range statusTests {
-		_, valid, err := getStatuses("ns", "test", st.annotations, "{namespace}-{name}-{port}-{hash}", true)
+		_, valid, err := getStatuses("ns", "test", st.annotations, &serviceReconciler)
 		if err != nil && !st.err {
 			t.Errorf("Set %q: expected no error, got one: %v", st.name, err)
 		}
@@ -256,7 +261,7 @@ func TestGetStatuses(t *testing.T) {
 
 func TestGetOldStatuses(t *testing.T) {
 	for _, st := range oldStatusTests {
-		_, valid, err := getStatuses("ns", "test", st.annotations, "{namespace}-{name}-{port}-{hash}", true)
+		_, valid, err := getStatuses("ns", "test", st.annotations, &serviceReconciler)
 		if err != nil && !st.err {
 			t.Errorf("Set %q: expected no error, got one: %v", st.name, err)
 		}
@@ -273,8 +278,9 @@ func TestGetOldStatuses(t *testing.T) {
 }
 
 func TestGetStatusesServiceNameNotAllowed(t *testing.T) {
+	serviceReconciler.AllowServiceName = false
 	validConf := `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":100}]}}`
-	statuses, valid, err := getStatuses("ns", "test", map[string]string{autonegAnnotation: validConf}, "{namespace}-{name}-{port}", false)
+	statuses, valid, err := getStatuses("ns", "test", map[string]string{autonegAnnotation: validConf}, &serviceReconciler)
 	if err != nil {
 		t.Errorf("Expected no error, got one: %v", err)
 	}
@@ -289,7 +295,7 @@ func TestGetStatusesServiceNameNotAllowed(t *testing.T) {
 
 func TestGetStatusesServiceNameAllowed(t *testing.T) {
 	validConf := `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":100}]}}`
-	statuses, valid, err := getStatuses("ns", "test", map[string]string{autonegAnnotation: validConf}, "{namespace}-{name}-{port}", true)
+	statuses, valid, err := getStatuses("ns", "test", map[string]string{autonegAnnotation: validConf}, &serviceReconciler)
 	if err != nil {
 		t.Errorf("Expected no error, got one: %v", err)
 	}

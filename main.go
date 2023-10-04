@@ -56,11 +56,15 @@ func init() {
 func main() {
 	var metricsAddr string
 	var probeAddr string
+	var maxRatePerEndpointDefault float64
+	var maxConnectionsPerEndpointDefault float64
 	var enableLeaderElection bool
 	var serviceNameTemplate string
 	var allowServiceName bool
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	flag.Float64Var(&maxRatePerEndpointDefault, "max-rate-per-endpoint", 0, "The address the probe endpoint binds to.")
+	flag.Float64Var(&maxConnectionsPerEndpointDefault, "max-connections-per-endpoint", 0, "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
@@ -111,12 +115,14 @@ func main() {
 	}
 
 	if err = (&controllers.ServiceReconciler{
-		Client:              mgr.GetClient(),
-		Scheme:              mgr.GetScheme(),
-		BackendController:   controllers.NewBackendController(project, s),
-		Recorder:            mgr.GetEventRecorderFor("autoneg-controller"),
-		ServiceNameTemplate: serviceNameTemplate,
-		AllowServiceName:    allowServiceName,
+		Client:                           mgr.GetClient(),
+		Scheme:                           mgr.GetScheme(),
+		BackendController:                controllers.NewBackendController(project, s),
+		Recorder:                         mgr.GetEventRecorderFor("autoneg-controller"),
+		ServiceNameTemplate:              serviceNameTemplate,
+		AllowServiceName:                 allowServiceName,
+		MaxRatePerEndpointDefault:        maxRatePerEndpointDefault,
+		MaxConnectionsPerEndpointDefault: maxConnectionsPerEndpointDefault,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Service")
 		os.Exit(1)

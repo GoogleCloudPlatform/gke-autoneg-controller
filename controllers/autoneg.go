@@ -408,7 +408,7 @@ func validateNewConfig(config AutonegConfig) error {
 	return nil
 }
 
-func getStatuses(namespace string, name string, annotations map[string]string, serviceNameTemplate string, allowServiceName bool) (s Statuses, valid bool, err error) {
+func getStatuses(namespace string, name string, annotations map[string]string, r *ServiceReconciler) (s Statuses, valid bool, err error) {
 	// Read the current cloud.google.com/neg annotation
 	tmp, ok := annotations[negAnnotation]
 	if ok {
@@ -433,10 +433,20 @@ func getStatuses(namespace string, name string, annotations map[string]string, s
 		for port, cfgs := range tempConfig.BackendServices {
 			s.config.BackendServices[port] = make(map[string]AutonegNEGConfig, len(cfgs))
 			for _, cfg := range cfgs {
-				if cfg.Name == "" || !allowServiceName {
+				if cfg.Name == "" || !r.AllowServiceName {
 					// Default to name generated using serviceNameTemplate
-					cfg.Name = generateServiceName(namespace, name, port, serviceNameTemplate)
+					cfg.Name = generateServiceName(namespace, name, port, r.ServiceNameTemplate)
 				}
+
+				//Use defaults if rate and connections have not been set
+				if cfg.Rate == 0 && cfg.Connections == 0 {
+					if r.MaxRatePerEndpointDefault > 0 {
+						cfg.Connections = r.MaxRatePerEndpointDefault
+					} else {
+						cfg.Connections = r.MaxConnectionsPerEndpointDefault
+					}
+				}
+
 				s.config.BackendServices[port][cfg.Name] = cfg
 			}
 		}

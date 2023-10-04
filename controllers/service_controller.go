@@ -37,9 +37,11 @@ type ServiceReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 	*BackendController
-	Recorder            record.EventRecorder
-	ServiceNameTemplate string
-	AllowServiceName    bool
+	Recorder                         record.EventRecorder
+	ServiceNameTemplate              string
+	AllowServiceName                 bool
+	MaxRatePerEndpointDefault        float64
+	MaxConnectionsPerEndpointDefault float64
 }
 
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;update;patch
@@ -70,7 +72,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return reconcile.Result{}, err
 	}
 
-	status, ok, err := getStatuses(svc.Namespace, svc.Name, svc.ObjectMeta.Annotations, r.ServiceNameTemplate, r.AllowServiceName)
+	status, ok, err := getStatuses(svc.Namespace, svc.Name, svc.ObjectMeta.Annotations, r)
 	// Is this service using autoneg?
 	if !ok {
 		return reconcile.Result{}, nil
