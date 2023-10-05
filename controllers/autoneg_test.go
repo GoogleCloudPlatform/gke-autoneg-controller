@@ -236,12 +236,11 @@ var oldStatusTests = []struct {
 	},
 }
 
-var serviceReconciler = ServiceReconciler{
-	ServiceNameTemplate: "{namespace}-{name}-{port}-{hash}",
-	AllowServiceName:    true,
-}
-
 func TestGetStatuses(t *testing.T) {
+	var serviceReconciler = ServiceReconciler{
+		ServiceNameTemplate: "{namespace}-{name}-{port}-{hash}",
+		AllowServiceName:    true,
+	}
 	for _, st := range statusTests {
 		_, valid, err := getStatuses("ns", "test", st.annotations, &serviceReconciler)
 		if err != nil && !st.err {
@@ -260,6 +259,10 @@ func TestGetStatuses(t *testing.T) {
 }
 
 func TestGetOldStatuses(t *testing.T) {
+	var serviceReconciler = ServiceReconciler{
+		ServiceNameTemplate: "{namespace}-{name}-{port}-{hash}",
+		AllowServiceName:    true,
+	}
 	for _, st := range oldStatusTests {
 		_, valid, err := getStatuses("ns", "test", st.annotations, &serviceReconciler)
 		if err != nil && !st.err {
@@ -278,8 +281,10 @@ func TestGetOldStatuses(t *testing.T) {
 }
 
 func TestGetStatusesServiceNameNotAllowed(t *testing.T) {
-	serviceReconciler.ServiceNameTemplate = "{namespace}-{name}-{port}"
-	serviceReconciler.AllowServiceName = false
+	var serviceReconciler = ServiceReconciler{
+		ServiceNameTemplate: "{namespace}-{name}-{port}",
+		AllowServiceName:    false,
+	}
 	validConf := `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":100}]}}`
 	statuses, valid, err := getStatuses("ns", "test", map[string]string{autonegAnnotation: validConf}, &serviceReconciler)
 	if err != nil {
@@ -295,7 +300,10 @@ func TestGetStatusesServiceNameNotAllowed(t *testing.T) {
 }
 
 func TestGetStatusesServiceNameAllowed(t *testing.T) {
-	serviceReconciler.ServiceNameTemplate = "{namespace}-{name}-{port}"
+	var serviceReconciler = ServiceReconciler{
+		ServiceNameTemplate: "{namespace}-{name}-{port}",
+		AllowServiceName:    true,
+	}
 	validConf := `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":100}]}}`
 	statuses, valid, err := getStatuses("ns", "test", map[string]string{autonegAnnotation: validConf}, &serviceReconciler)
 	if err != nil {
@@ -307,6 +315,98 @@ func TestGetStatusesServiceNameAllowed(t *testing.T) {
 	_, ok := statuses.config.BackendServices["80"]["http-be"]
 	if !ok {
 		t.Errorf("Expected service config for http-be but got none, service statuses: \n%v", statuses.config.BackendServices)
+	}
+}
+
+func TestDefaultMaxRatePerEndpointWhenOverrideIsSet(t *testing.T) {
+	var serviceReconciler = ServiceReconciler{
+		ServiceNameTemplate:       "{namespace}-{name}-{port}",
+		AllowServiceName:          true,
+		MaxRatePerEndpointDefault: 1234,
+	}
+	validConf := `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":100}]}}`
+	statuses, valid, err := getStatuses("ns", "test", map[string]string{autonegAnnotation: validConf}, &serviceReconciler)
+	if err != nil {
+		t.Errorf("Expected no error, got one: %v", err)
+	}
+	if !valid {
+		t.Errorf("Expected autoneg config, got none")
+	}
+	cfg, ok := statuses.config.BackendServices["80"]["http-be"]
+	if !ok {
+		t.Errorf("Expected service config for http-be but got none, service statuses: \n%v", statuses.config.BackendServices)
+	}
+	if cfg.Rate != 100 {
+		t.Errorf("Expected max_rate_per_endpoint to be 100 but got: \n%v", cfg.Rate)
+	}
+}
+
+func TestDefaultMaxRatePerEndpointWhenOverrideIsNotSet(t *testing.T) {
+	var serviceReconciler = ServiceReconciler{
+		ServiceNameTemplate:       "{namespace}-{name}-{port}",
+		AllowServiceName:          true,
+		MaxRatePerEndpointDefault: 1234,
+	}
+	validConf := `{"backend_services":{"80":[{"name":"http-be"}]}}`
+	statuses, valid, err := getStatuses("ns", "test", map[string]string{autonegAnnotation: validConf}, &serviceReconciler)
+	if err != nil {
+		t.Errorf("Expected no error, got one: %v", err)
+	}
+	if !valid {
+		t.Errorf("Expected autoneg config, got none")
+	}
+	cfg, ok := statuses.config.BackendServices["80"]["http-be"]
+	if !ok {
+		t.Errorf("Expected service config for http-be but got none, service statuses: \n%v", statuses.config.BackendServices)
+	}
+	if cfg.Rate != 1234 {
+		t.Errorf("Expected max_rate_per_endpoint to be 1234 but got: \n%v", cfg.Rate)
+	}
+}
+
+func TestDefaultConnectionPerEndpointWhenOverrideIsSet(t *testing.T) {
+	var serviceReconciler = ServiceReconciler{
+		ServiceNameTemplate:              "{namespace}-{name}-{port}",
+		AllowServiceName:                 true,
+		MaxConnectionsPerEndpointDefault: 1234,
+	}
+	validConf := `{"backend_services":{"80":[{"name":"http-be","max_connections_per_endpoint":100}]}}`
+	statuses, valid, err := getStatuses("ns", "test", map[string]string{autonegAnnotation: validConf}, &serviceReconciler)
+	if err != nil {
+		t.Errorf("Expected no error, got one: %v", err)
+	}
+	if !valid {
+		t.Errorf("Expected autoneg config, got none")
+	}
+	cfg, ok := statuses.config.BackendServices["80"]["http-be"]
+	if !ok {
+		t.Errorf("Expected service config for http-be but got none, service statuses: \n%v", statuses.config.BackendServices)
+	}
+	if cfg.Connections != 100 {
+		t.Errorf("Expected max_rate_per_endpoint to be 100 but got: \n%v", cfg.Rate)
+	}
+}
+
+func TestDefaultMaxConnectionsEndpointWhenOverrideIsNotSet(t *testing.T) {
+	var serviceReconciler = ServiceReconciler{
+		ServiceNameTemplate:              "{namespace}-{name}-{port}",
+		AllowServiceName:                 true,
+		MaxConnectionsPerEndpointDefault: 1234,
+	}
+	validConf := `{"backend_services":{"80":[{"name":"http-be"}]}}`
+	statuses, valid, err := getStatuses("ns", "test", map[string]string{autonegAnnotation: validConf}, &serviceReconciler)
+	if err != nil {
+		t.Errorf("Expected no error, got one: %v", err)
+	}
+	if !valid {
+		t.Errorf("Expected autoneg config, got none")
+	}
+	cfg, ok := statuses.config.BackendServices["80"]["http-be"]
+	if !ok {
+		t.Errorf("Expected service config for http-be but got none, service statuses: \n%v", statuses.config.BackendServices)
+	}
+	if cfg.Connections != 1234 {
+		t.Errorf("Expected max_connections_per_endpoint to be 1234 but got: \n%v", cfg.Rate)
 	}
 }
 

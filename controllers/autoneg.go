@@ -441,7 +441,7 @@ func getStatuses(namespace string, name string, annotations map[string]string, r
 				//Use defaults if rate and connections have not been set
 				if cfg.Rate == 0 && cfg.Connections == 0 {
 					if r.MaxRatePerEndpointDefault > 0 {
-						cfg.Connections = r.MaxRatePerEndpointDefault
+						cfg.Rate = r.MaxRatePerEndpointDefault
 					} else {
 						cfg.Connections = r.MaxConnectionsPerEndpointDefault
 					}
