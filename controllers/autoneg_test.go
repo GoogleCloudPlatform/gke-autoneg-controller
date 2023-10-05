@@ -278,6 +278,7 @@ func TestGetOldStatuses(t *testing.T) {
 }
 
 func TestGetStatusesServiceNameNotAllowed(t *testing.T) {
+	serviceReconciler.ServiceNameTemplate = "{namespace}-{name}-{port}"
 	serviceReconciler.AllowServiceName = false
 	validConf := `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":100}]}}`
 	statuses, valid, err := getStatuses("ns", "test", map[string]string{autonegAnnotation: validConf}, &serviceReconciler)
@@ -294,6 +295,7 @@ func TestGetStatusesServiceNameNotAllowed(t *testing.T) {
 }
 
 func TestGetStatusesServiceNameAllowed(t *testing.T) {
+	serviceReconciler.ServiceNameTemplate = "{namespace}-{name}-{port}"
 	validConf := `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":100}]}}`
 	statuses, valid, err := getStatuses("ns", "test", map[string]string{autonegAnnotation: validConf}, &serviceReconciler)
 	if err != nil {
