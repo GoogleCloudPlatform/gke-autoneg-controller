@@ -18,14 +18,15 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -37,11 +38,11 @@ import (
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
-var cfg *rest.Config
 var k8sClient client.Client
 var k8sManager ctrl.Manager
 var testEnv *envtest.Environment
 var cancel context.CancelFunc
+var backendController *TestBackendController
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -79,12 +80,17 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).ToNot(HaveOccurred())
 
+	backendController = &TestBackendController{Counter: 0}
+	duration := 1 * time.Second
+
 	err = (&ServiceReconciler{
 		Client:              k8sManager.GetClient(),
-		BackendController:   &BackendController{},
+		BackendController:   backendController,
 		Recorder:            k8sManager.GetEventRecorderFor("autoneg-controller"),
 		ServiceNameTemplate: serviceNameTemplate,
 		AllowServiceName:    true,
+		AlwaysReconcile:     true,
+		ReconcileDuration:   &duration,
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
@@ -94,6 +100,16 @@ var _ = BeforeSuite(func() {
 		Expect(err).ToNot(HaveOccurred())
 	}()
 }, 60)
+
+type TestBackendController struct {
+	Counter int
+}
+
+func (t *TestBackendController) ReconcileBackends(AutonegStatus, AutonegStatus) error {
+	t.Counter++
+	fmt.Print(t.Counter)
+	return nil
+}
 
 var _ = AfterSuite(func() {
 	cancel()

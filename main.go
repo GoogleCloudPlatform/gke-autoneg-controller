@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -61,10 +62,12 @@ func main() {
 	var enableLeaderElection bool
 	var serviceNameTemplate string
 	var allowServiceName bool
+	var alwaysReconcile bool
+	var reconcilePeriod string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.Float64Var(&maxRatePerEndpointDefault, "max-rate-per-endpoint", 0, "The address the probe endpoint binds to.")
-	flag.Float64Var(&maxConnectionsPerEndpointDefault, "max-connections-per-endpoint", 0, "The address the probe endpoint binds to.")
+	flag.Float64Var(&maxRatePerEndpointDefault, "max-rate-per-endpoint-default", 0, "Default max rate per endpoint. Can be overriden by user config.")
+	flag.Float64Var(&maxConnectionsPerEndpointDefault, "max-connections-per-endpoint-default", 0, "Default max connections per endpoint. Can be overriden by user config.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
@@ -72,6 +75,8 @@ func main() {
 		"A naming template consists of {namespace}, {name}, {port} or {hash} separated by hyphens, "+
 			"where {hash} is the first 8 digits of a hash of other given information")
 	flag.BoolVar(&allowServiceName, "enable-custom-service-names", true, "Enable using custom service names in autoneg annotation.")
+	flag.BoolVar(&alwaysReconcile, "always-reconcile", false, "Periodically reconciles even if annotation statuses don't change.")
+	flag.StringVar(&reconcilePeriod, "reconcile-period", "", "The minimum frequency at which watched resources are reconciled, e.g. 10m. Defaults to 10h if not set.")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -93,6 +98,15 @@ func main() {
 	if project == "" {
 		setupLog.Error(err, "can't determine project ID")
 		os.Exit(1)
+	}
+
+	var reconcileDuration time.Duration
+	if reconcilePeriod != "" {
+		reconcileDuration, err = time.ParseDuration(reconcilePeriod)
+		if err != nil {
+			setupLog.Error(err, "Invalid reconcilePeriod")
+			os.Exit(1)
+		}
 	}
 
 	if !controllers.IsValidServiceNameTemplate(serviceNameTemplate) {
@@ -123,6 +137,8 @@ func main() {
 		AllowServiceName:                 allowServiceName,
 		MaxRatePerEndpointDefault:        maxRatePerEndpointDefault,
 		MaxConnectionsPerEndpointDefault: maxConnectionsPerEndpointDefault,
+		AlwaysReconcile:                  alwaysReconcile,
+		ReconcileDuration:                &reconcileDuration,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Service")
 		os.Exit(1)

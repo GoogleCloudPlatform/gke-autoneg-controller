@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -32,16 +33,22 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+type BackendController interface {
+	ReconcileBackends(AutonegStatus, AutonegStatus) error
+}
+
 // ServiceReconciler reconciles a Service object
 type ServiceReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
-	*BackendController
+	BackendController
 	Recorder                         record.EventRecorder
 	ServiceNameTemplate              string
 	AllowServiceName                 bool
 	MaxRatePerEndpointDefault        float64
 	MaxConnectionsPerEndpointDefault float64
+	AlwaysReconcile                  bool
+	ReconcileDuration                *time.Duration
 }
 
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;update;patch
@@ -66,21 +73,21 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			// Object not found, return.
-			return reconcile.Result{}, nil
+			return r.reconcileResult(nil)
 		}
 		// Error reading the object - requeue the request.
-		return reconcile.Result{}, err
+		return r.reconcileResult(err)
 	}
 
 	status, ok, err := getStatuses(svc.Namespace, svc.Name, svc.ObjectMeta.Annotations, r)
 	// Is this service using autoneg?
 	if !ok {
-		return reconcile.Result{}, nil
+		return r.reconcileResult(nil)
 	}
 
 	if err != nil {
 		r.Recorder.Event(svc, "Warning", "ConfigError", err.Error())
-		return reconcile.Result{}, err
+		return r.reconcileResult(err)
 	}
 
 	deleting := false
@@ -102,9 +109,9 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	if deleting {
 		intendedStatus.BackendServices = make(map[string]map[string]AutonegNEGConfig, 0)
-	} else if reflect.DeepEqual(status.status, intendedStatus) {
+	} else if reflect.DeepEqual(status.status, intendedStatus) && !r.AlwaysReconcile {
 		// Equal, no reconciliation necessary
-		return reconcile.Result{}, nil
+		return r.reconcileResult(nil)
 	}
 
 	// Reconcile differences
@@ -114,11 +121,11 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		var e *errNotFound
 		if !(deleting && errors.As(err, &e)) {
 			r.Recorder.Event(svc, "Warning", "BackendError", err.Error())
-			return reconcile.Result{}, err
+			return r.reconcileResult(err)
 		}
 		if deleting {
 			r.Recorder.Event(svc, "Warning", "BackendError while deleting", err.Error())
-			return reconcile.Result{}, err
+			return r.reconcileResult(err)
 		}
 	}
 
@@ -147,7 +154,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		anStatus, err := json.Marshal(intendedStatus)
 		if err != nil {
 			logger.Error(err, "json marshal error")
-			return reconcile.Result{}, err
+			return r.reconcileResult(err)
 		}
 		svc.ObjectMeta.Annotations[autonegStatusAnnotation] = string(anStatus)
 
@@ -156,7 +163,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 			if err != nil {
 				logger.Error(err, "json marshal error")
-				return reconcile.Result{}, err
+				return r.reconcileResult(err)
 			}
 
 			svc.ObjectMeta.Annotations[oldAutonegStatusAnnotation] = string(oldStatus)
@@ -168,7 +175,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		if !apierrors.IsConflict(err) {
 			r.Recorder.Event(svc, "Warning", "BackendError", err.Error())
 		}
-		return reconcile.Result{}, err
+		return r.reconcileResult(err)
 	}
 
 	for port, endpointGroups := range intendedStatus.BackendServices {
@@ -190,7 +197,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 	}
 
-	return reconcile.Result{}, nil
+	return r.reconcileResult(nil)
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -218,4 +225,11 @@ func removeString(slice []string, s string) (result []string) {
 		result = append(result, item)
 	}
 	return
+}
+
+func (r *ServiceReconciler) reconcileResult(err error) (reconcile.Result, error) {
+	if r.ReconcileDuration != nil && r.AlwaysReconcile {
+		return reconcile.Result{RequeueAfter: *r.ReconcileDuration}, err
+	}
+	return reconcile.Result{}, err
 }
