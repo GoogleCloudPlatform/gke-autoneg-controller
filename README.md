@@ -82,8 +82,8 @@ The controller parameters can be customized via changing the [controller deploym
   to false. The template defaults to `{name}-{port}`. It can contain `namespace`, `name`, `port` and `hash` and the non-hash values will be 
   truncated evenly if the full name is longer than 63 characters. `<hash>` is generated using full length `namespace`, `name` and 
   `port` to avoid name collisions when truncated.
-* `--max-rate-per-endpoint-default`: optional. Sets a default value for max-rate-per-endpoint that can be overriden by user config. Defaults to 0.
-* `--max-connections-per-endpoint-default`: optional. Same as above but for connections.
+* `--max-rate-per-endpoint`: optional. Sets a default value for max-rate-per-endpoint that can be overriden by user config. Defaults to 0.
+* `--max-connections-per-endpoint`: optional. Same as above but for connections.
 * `--always-reconcile`: optional. Makes it possible to reconcile periodically even if the status annotatons don't change. Defaults to false.
 * `--reconcile-period`: optional. Sets a reconciliation duration if always-reconcile mode is on. Defaults to 10 hours.
 

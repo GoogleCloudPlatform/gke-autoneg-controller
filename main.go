@@ -66,8 +66,8 @@ func main() {
 	var reconcilePeriod string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.Float64Var(&maxRatePerEndpointDefault, "max-rate-per-endpoint-default", 0, "Default max rate per endpoint. Can be overriden by user config.")
-	flag.Float64Var(&maxConnectionsPerEndpointDefault, "max-connections-per-endpoint-default", 0, "Default max connections per endpoint. Can be overriden by user config.")
+	flag.Float64Var(&maxRatePerEndpointDefault, "max-rate-per-endpoint", 0, "Default max rate per endpoint. Can be overriden by user config.")
+	flag.Float64Var(&maxConnectionsPerEndpointDefault, "max-connections-per-endpoint", 0, "Default max connections per endpoint. Can be overriden by user config.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
