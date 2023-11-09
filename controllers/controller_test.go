@@ -77,6 +77,16 @@ var _ = Describe("Run autoneg Controller", func() {
 			Expect(updatedAnnos[negStatusAnnotation]).To(BeEmpty())
 		})
 
+		Context("Reconciles periodically", func() {
+
+			It("should reconcile", func() {
+				timesReconciled := backendController.Counter
+				time.Sleep(2 * time.Second)
+				Expect(backendController.Counter-timesReconciled > 0).To(BeTrue(), "should have at least reconciled once.")
+			})
+
+		})
+
 		Context("Remove the service", func() {
 
 			It("should succeed", func() {

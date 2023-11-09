@@ -85,7 +85,7 @@ type Backends struct {
 }
 
 // BackendController manages operations on a GCLB backend service
-type BackendController struct {
+type ProdBackendController struct {
 	project string
 	s       *compute.Service
 }

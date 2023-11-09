@@ -91,14 +91,14 @@ func (s AutonegStatus) Backend(name string, port string, group string) compute.B
 }
 
 // NewBackendController takes the project name and an initialized *compute.Service
-func NewBackendController(project string, s *compute.Service) *BackendController {
-	return &BackendController{
+func NewBackendController(project string, s *compute.Service) *ProdBackendController {
+	return &ProdBackendController{
 		project: project,
 		s:       s,
 	}
 }
 
-func (b *BackendController) getBackendService(name string, region string) (svc *compute.BackendService, err error) {
+func (b *ProdBackendController) getBackendService(name string, region string) (svc *compute.BackendService, err error) {
 	if region == "" {
 		svc, err = compute.NewBackendServicesService(b.s).Get(b.project, name).Do()
 		if e, ok := err.(*googleapi.Error); ok {
@@ -118,7 +118,7 @@ func (b *BackendController) getBackendService(name string, region string) (svc *
 
 }
 
-func (b *BackendController) updateBackends(name string, region string, svc *compute.BackendService) error {
+func (b *ProdBackendController) updateBackends(name string, region string, svc *compute.BackendService) error {
 	if len(svc.Backends) == 0 {
 		svc.NullFields = []string{"Backends"}
 	}
@@ -181,10 +181,7 @@ func checkOperation(op *compute.Operation) error {
 
 // ReconcileBackends takes the actual and intended AutonegStatus
 // and attempts to apply the intended status or return an error
-func (b *BackendController) ReconcileBackends(actual, intended AutonegStatus) (err error) {
-	if b.s == nil { // test suite
-		return nil
-	}
+func (b *ProdBackendController) ReconcileBackends(actual, intended AutonegStatus) (err error) {
 	removes, upserts := ReconcileStatus(b.project, actual, intended)
 
 	for port, _removes := range removes {
