@@ -49,9 +49,7 @@ use across multiple clusters.
 
 By default, `autoneg` will initialize the `capacityScaler` to 1, which means that the new backend will receive a proportional volume
 of traffic according to the maximum rate or connections per endpoint configuration. You can customize this default by supplying
-the `initial_capacity` variable, which may be useful to steer traffic in blue/green deployment scenarios. On any changes, `autoneg`
-will leave  whatever is set in that value. The `capacityScaler` mechanism can be used orthogonally by interactive tooling to manage 
-traffic shifting in such uses cases as deployment or failover.
+the `initial_capacity` variable, which may be useful to steer traffic in blue/green deployment scenarios. The `capacityScaler` mechanism can be used to manage traffic shifting in such uses cases as deployment or failover.
 
 ## Autoneg Configuration
 
