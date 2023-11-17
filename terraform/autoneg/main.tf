@@ -43,7 +43,7 @@ module "kubernetes" {
   controller_image      = var.controller_image
   image_pull_policy     = var.image_pull_policy
   kube_rbac_proxy_image = var.kube_rbac_proxy_image
-
+  priority_class_name   = var.priority_class_name
   service_account_email = module.gcp.service_account_email
   workload_identity     = var.workload_identity
 }

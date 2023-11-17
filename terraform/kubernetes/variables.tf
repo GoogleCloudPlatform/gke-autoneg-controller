@@ -64,3 +64,9 @@ variable "workload_identity" {
     service_account = "autoneg"
   }
 }
+
+variable "priority_class_name" {
+  description = "Pod's PriorityClass name"
+  type        = string
+  default     = null
+}

@@ -60,3 +60,9 @@ variable "service_account_id" {
   default     = "autoneg"
   type        = string
 }
+
+variable "priority_class_name" {
+  description = "Pod's PriorityClass name"
+  type        = string
+  default     = null
+}
