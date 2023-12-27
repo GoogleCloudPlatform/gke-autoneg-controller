@@ -229,6 +229,7 @@ func (b *ProdBackendController) ReconcileBackends(actual, intended AutonegStatus
 						// TODO: copy fields explicitly
 						be.MaxRatePerEndpoint = u.MaxRatePerEndpoint
 						be.MaxConnectionsPerEndpoint = u.MaxConnectionsPerEndpoint
+						be.CapacityScaler = u.CapacityScaler
 						copy = false
 						break
 					}
