@@ -1,0 +1,114 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "autoneg.fullname" . | quote }}
+  namespace: {{ include "autoneg.namespace" . | quote }}
+  labels:
+    {{- include "autoneg.labels" . | nindent 4 }}
+  {{- with .Values.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  minReadySeconds: {{ .Values.minReadySeconds | default 0 }}
+{{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicas }}
+{{- end }}
+  selector:
+    matchLabels:
+      {{- include "autoneg.selectorLabels" . | nindent 6 }}
+  strategy:
+  {{- with .Values.strategy }}
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  template:
+    metadata:
+    {{- with .Values.annotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      labels:
+        {{- include "autoneg.labels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "autoneg.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      {{- if .Values.initContainers }}
+      initContainers:
+      {{- range .Values.initContainers }}
+        - name: {{ .name | quote }}
+          image: {{ .image | quote }}
+          command:
+            {{- range .command }}
+            - {{ . }}
+            {{- end }}
+          volumeMounts:
+            {{- range .volumeMounts }}
+            - name: {{ .name | quote }}
+              mountPath: {{ .mountPath | quote }}
+            {{- end }}
+          {{- if or $.Values.initenv .env }}
+          env:
+            {{- if .env }}
+            {{- range $k, $v := .env }}
+            - name: {{ $k | quote }}
+              value: {{ $v | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if $.Values.initenv }}
+            {{- range $k, $v := $.Values.initenv }}
+            - name: {{ $k | quote }}
+              value: {{ $v | quote }}
+            {{- end }}
+            {{- end }}
+          {{- end }}
+      {{- end }}
+      {{- end }}
+      containers:
+        {{- if .Values.kube_rbac_proxy }}
+        - name: {{ .Values.kube_rbac_proxy.name }}
+          image: {{ .Values.kube_rbac_proxy.image | quote }}
+          securityContext:
+            {{- toYaml .Values.kube_rbac_proxy.securityContext | nindent 12 }}
+          args:
+            {{- toYaml .Values.kube_rbac_proxy.args | nindent 12 }}
+          ports:
+            - name: https
+              containerPort: {{ .Values.kube_rbac_proxy.port | default 8443 }}
+        {{- end }}
+        - name: {{ .Values.gke_autoneg_controller.name }}
+          image: {{ .Values.gke_autoneg_controller.image | quote }}
+          securityContext:
+            {{- toYaml .Values.gke_autoneg_controller.securityContext | nindent 12 }}
+          args:
+            {{- toYaml .Values.gke_autoneg_controller.args | nindent 12 }}
+          command:
+            {{- toYaml .Values.gke_autoneg_controller.command | nindent 12 }}
+          {{- if .Values.gke_autoneg_controller.livenessProbe }}
+          livenessProbe:
+            {{- toYaml .Values.gke_autoneg_controller.livenessProbe | nindent 12 }}
+          {{- end }}
+          {{- if .Values.gke_autoneg_controller.readinessProbe }}
+          readinessProbe:
+            {{- toYaml .Values.gke_autoneg_controller.readinessProbe | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.gke_autoneg_controller.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds | default 10 }}
