@@ -140,3 +140,11 @@ release-image: docker-build
 # Push release image
 release-push: release-image
 	${DOCKER_BIN} push ${RELEASE_IMG}:${VERSION}
+
+helm: helm-docs helm-lint
+
+helm-lint:
+	helm lint deploy/chart
+
+helm-docs:
+	helm-docs
