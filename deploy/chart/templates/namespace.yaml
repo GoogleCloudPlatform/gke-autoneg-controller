@@ -1,3 +1,4 @@
+{{ if eq .Values.createNamespace true }}
 ---
 apiVersion: v1
 kind: Namespace
@@ -9,3 +10,4 @@ metadata:
     {{- toYaml . | nindent 4 }}
   {{- end }}
   name: {{ include "autoneg.namespace" . | quote }}
+{{ end }}

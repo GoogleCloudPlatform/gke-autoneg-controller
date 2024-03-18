@@ -1,7 +1,10 @@
 ---
 name: &name autoneg-controller-manager
 
-annotations: {}
+createNamespace: true
+
+annotations:
+  {}
   # annontated: true
 
 labels:
@@ -44,21 +47,21 @@ kube_rbac_proxy:
     allowPrivilegeEscalation: false
     privileged: false
   args:
-  - --secure-listen-address=0.0.0.0:8443
-  - --upstream=http://127.0.0.1:8080/
-  - --logtostderr=true
-  - --v=10
+    - --secure-listen-address=0.0.0.0:8443
+    - --upstream=http://127.0.0.1:8080/
+    - --logtostderr=true
+    - --v=10
   port: 8443
 
 gke_autoneg_controller:
   name: manager
   image: ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:latest
   command:
-  - /manager
+    - /manager
   args:
-  - --health-probe-bind-address=:8081
-  - --metrics-bind-address=127.0.0.1:8080
-  - --leader-elect
+    - --health-probe-bind-address=:8081
+    - --metrics-bind-address=127.0.0.1:8080
+    - --leader-elect
   securityContext:
     allowPrivilegeEscalation: false
     privileged: false
