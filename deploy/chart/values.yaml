@@ -24,6 +24,7 @@ replicas: 1
 serviceAccount:
   create: true
   name: autoneg-controller-manager
+  annotations: {}
 
 nodeSelector:
   iam.gke.io/gke-metadata-server-enabled: "true"
