@@ -3,6 +3,12 @@ variable "controller_image" {
   description = "Autoneg controller container image"
 }
 
+variable "extra_args" {
+  type        = list(string)
+  default     = []
+  description = "Arguments added to the autoneg controller start"
+}
+
 variable "image_pull_policy" {
   type        = string
   description = "Image pull policy for Autoneg container"
