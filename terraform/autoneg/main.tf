@@ -41,6 +41,7 @@ module "kubernetes" {
 
   project_id            = var.project_id
   controller_image      = var.controller_image
+  extra_args            = var.extra_args
   image_pull_policy     = var.image_pull_policy
   kube_rbac_proxy_image = var.kube_rbac_proxy_image
   priority_class_name   = var.priority_class_name

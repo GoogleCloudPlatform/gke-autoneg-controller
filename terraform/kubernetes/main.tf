@@ -290,7 +290,7 @@ resource "kubernetes_deployment" "deployment_autoneg_controller_manager" {
           image             = var.controller_image
           image_pull_policy = var.image_pull_policy
 
-          args    = ["--health-probe-bind-address=:8081", "--metrics-bind-address=127.0.0.1:8080", "--leader-elect"]
+          args    = concat(["--health-probe-bind-address=:8081", "--metrics-bind-address=127.0.0.1:8080", "--leader-elect"], var.extra_args)
           command = ["/manager"]
 
           security_context {
