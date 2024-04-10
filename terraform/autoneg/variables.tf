@@ -22,7 +22,7 @@ variable "project_id" {
 variable "controller_image" {
   type        = string
   description = "Autoneg controller container image"
-  default     = "ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:v1.0.0"
+  default     = "ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:latest"
 }
 
 variable "image_pull_policy" {
