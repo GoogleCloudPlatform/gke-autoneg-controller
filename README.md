@@ -145,6 +145,10 @@ module "autoneg" {
   source = "github.com/GoogleCloudPlatform/gke-autoneg-controller//terraform/autoneg"
 
   project_id = "your-project-id"
+  
+  # NOTE: You may need to build your own image if you rely on features merged between releases, and do
+  # not wish to use the `latest` image.
+  controller_image = "ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:v1.0.0"
 }
 ```
 
