@@ -36,6 +36,8 @@ var (
 	validStatus        = `{}`
 	validAutonegConfig = `{}`
 	validAutonegStatus = `{}`
+	validSyncConfig    = `{"capacity_scaler":true}`
+	invalidSyncConfig  = `{"capacity_scaler":"foobar"}`
 	invalidStatus      = `{`
 	oldValidConfig     = `{"name":"test", "max_rate_per_endpoint":100}`
 	oldBrokenConfig    = `{"name":"test", "max_rate_per_endpoint":"100"}`
@@ -143,6 +145,26 @@ var statusTests = []struct {
 		},
 		true,
 		false,
+	},
+	{
+		"valid autoneg config with valid neg status and sync status",
+		map[string]string{
+			autonegAnnotation:     validAutonegConfig,
+			negStatusAnnotation:   validStatus,
+			autonegSyncAnnotation: validSyncConfig,
+		},
+		true,
+		false,
+	},
+	{
+		"valid autoneg config with valid neg status and invalid sync status",
+		map[string]string{
+			autonegAnnotation:     validAutonegConfig,
+			negStatusAnnotation:   validStatus,
+			autonegSyncAnnotation: invalidSyncConfig,
+		},
+		true,
+		true,
 	},
 }
 
@@ -526,6 +548,23 @@ func TestValidateNewConfig(t *testing.T) {
 			},
 			err:                    false,
 			expectedCapacityScaler: 1,
+		},
+		{
+			name: "updated capacity",
+			config: AutonegConfig{
+				BackendServices: map[string]map[string]AutonegNEGConfig{
+					"80": {
+						"http-be": {
+							Name:            "http-be",
+							Rate:            100,
+							InitialCapacity: pointer.Int32Ptr(int32(10)),
+							CapacityScaler:  pointer.Int32Ptr(int32(42)),
+						},
+					},
+				},
+			},
+			err:                    false,
+			expectedCapacityScaler: 0.42,
 		},
 	}
 
