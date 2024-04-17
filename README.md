@@ -68,6 +68,7 @@ Specify options to configure the backends representing the NEGs that will be ass
 * `max_rate_per_endpoint`: required/optional. Integer representing the maximum rate a pod can handle. Pick either rate or connection.
 * `max_connections_per_endpoint`: required/optional. Integer representing the maximum amount of connections a pod can handle. Pick either rate or connection.
 * `initial_capacity`: optional. Integer configuring the initial capacityScaler, expressed as a percentage between 0 and 100. If set to 0, the backend service will not receive any traffic until an operator or other service adjusts the [capacity scaler setting](https://cloud.google.com/load-balancing/docs/backend-service#capacity_scaler).
+* `capacity_scaler`: optional. Autoneg manages the [capacity scaler setting](https://cloud.google.com/load-balancing/docs/backend-service#capacity_scaler) if this and the `controller.autoneg.dev/sync: '{"capacity_scaler":true}'` annotation is set on the service. Please note updating `capacityScaler` setting out of band (eg. via `gcloud`) won't be overridden until you change the `capacity_scaler` (or other value) in the service configuration.
 
 ### Controller parameters
 

@@ -50,6 +50,12 @@ type AutonegNEGConfig struct {
 	Rate            float64 `json:"max_rate_per_endpoint,omitempty"`
 	Connections     float64 `json:"max_connections_per_endpoint,omitempty"`
 	InitialCapacity *int32  `json:"initial_capacity,omitempty"`
+	CapacityScaler  *int32  `json:"capacity_scaler,omitempty"`
+}
+
+// Specifies additional configuration which to sync
+type AutonegSyncConfig struct {
+	CapacityScaler *bool `json:"capacity_scaler,omitempty"`
 }
 
 // AutonegStatus specifies the reconciled status of autoneg
@@ -64,17 +70,19 @@ type OldAutonegStatus struct {
 type AutonegStatus struct {
 	AutonegConfig
 	NEGStatus
+	AutonegSyncConfig *AutonegSyncConfig `json:"sync,omitempty"`
 }
 
 // Statuses represents the autoneg-relevant structs fetched from annotations
 type Statuses struct {
-	oldConfig OldAutonegConfig
-	config    AutonegConfig
-	oldStatus OldAutonegStatus
-	status    AutonegStatus
-	negStatus NEGStatus
-	negConfig NEGConfig
-	newConfig bool
+	oldConfig  OldAutonegConfig
+	config     AutonegConfig
+	oldStatus  OldAutonegStatus
+	status     AutonegStatus
+	negStatus  NEGStatus
+	negConfig  NEGConfig
+	newConfig  bool
+	syncConfig *AutonegSyncConfig
 }
 
 // Backends specifies a name and list of compute.Backends

@@ -101,6 +101,10 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		AutonegConfig: status.config,
 		NEGStatus:     status.negStatus,
 	}
+	logger.Info("Existing status", "status", status)
+	if status.syncConfig != nil {
+		intendedStatus.AutonegSyncConfig = status.syncConfig
+	}
 
 	oldIntendedStatus := OldAutonegStatus{
 		OldAutonegConfig: status.oldConfig,

@@ -70,6 +70,8 @@ LABELS ?= --label org.opencontainers.image.licenses="Apache-2.0" \
     --label org.opencontainers.image.vendor="Google LLC" \
     --label org.opencontainers.image.version="${VERSION}"
 
+BUILD_TIME = $(shell date)
+
 docker-build: test
 	${DOCKER_BIN} build ${DOCKER_FLAGS} ${LABELS} . -t ${IMG}
 
@@ -78,10 +80,10 @@ docker-push:
 	${DOCKER_BIN} push ${DOCKER_FLAGS} ${IMG}
 
 build: generate fmt vet ## Build manager binary.
-	go build -o bin/manager main.go
+	go build -ldflags='-X "main.BuildTime=${BUILD_TIME}"' -o bin/manager main.go
 
 run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./main.go
+	go run -ldflags='-X "main.BuildTime=${BUILD_TIME}"' ./main.go
 
 ##@ Deployment
 

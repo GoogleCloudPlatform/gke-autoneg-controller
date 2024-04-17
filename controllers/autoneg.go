@@ -37,6 +37,7 @@ const (
 	negAnnotation                 = "cloud.google.com/neg"
 	oldAutonegFinalizer           = "anthos.cft.dev/autoneg"
 	autonegFinalizer              = "controller.autoneg.dev/neg"
+	autonegSyncAnnotation         = "controller.autoneg.dev/sync"
 	computeOperationStatusDone    = "DONE"
 	computeOperationStatusRunning = "RUNNING"
 	computeOperationStatusPending = "PENDING"
@@ -64,6 +65,14 @@ func (s AutonegStatus) Backend(name string, port string, group string) compute.B
 	// Extract initial_capacity setting, if set
 	var capacityScaler float64 = 1
 	if capacity := cfg.InitialCapacity; capacity != nil {
+		// This case should not be possible since validateNewConfig checks
+		// it, but leave the default setting of 100% if capacity is less
+		// than 0 or greater than 100
+		if *capacity >= int32(0) && *capacity <= int32(100) {
+			capacityScaler = float64(*capacity) / 100
+		}
+	}
+	if capacity := cfg.CapacityScaler; capacity != nil {
 		// This case should not be possible since validateNewConfig checks
 		// it, but leave the default setting of 100% if capacity is less
 		// than 0 or greater than 100
@@ -118,11 +127,16 @@ func (b *ProdBackendController) getBackendService(name string, region string) (s
 
 }
 
-func (b *ProdBackendController) updateBackends(name string, region string, svc *compute.BackendService) error {
+func (b *ProdBackendController) updateBackends(name string, region string, svc *compute.BackendService, forceCapacity bool) error {
 	if len(svc.Backends) == 0 {
 		svc.NullFields = []string{"Backends"}
+	} else {
+		if forceCapacity {
+			for _, be := range svc.Backends {
+				be.ForceSendFields = []string{"CapacityScaler"}
+			}
+		}
 	}
-
 	// Perform locking to ensure we patch the intended object version
 	if region == "" {
 		p := compute.NewBackendServicesService(b.s).Patch(b.project, name, svc)
@@ -184,6 +198,7 @@ func checkOperation(op *compute.Operation) error {
 func (b *ProdBackendController) ReconcileBackends(actual, intended AutonegStatus) (err error) {
 	removes, upserts := ReconcileStatus(b.project, actual, intended)
 
+	var forceCapacity = false
 	for port, _removes := range removes {
 		for idx, remove := range _removes {
 			var oldSvc *compute.BackendService
@@ -216,7 +231,7 @@ func (b *ProdBackendController) ReconcileBackends(actual, intended AutonegStatus
 
 			// If we are changing backend services, save the old service
 			if upsert.name != remove.name {
-				if err = b.updateBackends(remove.name, remove.region, oldSvc); err != nil {
+				if err = b.updateBackends(remove.name, remove.region, oldSvc, false); err != nil {
 					return
 				}
 			}
@@ -229,17 +244,27 @@ func (b *ProdBackendController) ReconcileBackends(actual, intended AutonegStatus
 						// TODO: copy fields explicitly
 						be.MaxRatePerEndpoint = u.MaxRatePerEndpoint
 						be.MaxConnectionsPerEndpoint = u.MaxConnectionsPerEndpoint
-						be.CapacityScaler = u.CapacityScaler
+						if intended.AutonegSyncConfig != nil {
+							var syncConfig AutonegSyncConfig = *intended.AutonegSyncConfig
+							if syncConfig.CapacityScaler != nil && *syncConfig.CapacityScaler == true {
+								be.CapacityScaler = u.CapacityScaler
+								forceCapacity = true
+							}
+						} else {
+							// Force CapacityScaler to an "empty value"
+							u.CapacityScaler = 0
+						}
 						copy = false
 						break
 					}
 				}
 				if copy {
+					// It's a new backend to be added
 					newBackend := u
 					newSvc.Backends = append(newSvc.Backends, &newBackend)
 				}
 			}
-			err = b.updateBackends(upsert.name, upsert.region, newSvc)
+			err = b.updateBackends(upsert.name, upsert.region, newSvc, forceCapacity)
 			if err != nil {
 				return err
 			}
@@ -403,6 +428,17 @@ func validateNewConfig(config AutonegConfig) error {
 			}
 		}
 	}
+
+	for _, cfgs := range config.BackendServices {
+		for _, cfg := range cfgs {
+			if cfg.CapacityScaler != nil {
+				if *cfg.CapacityScaler < 0 || *cfg.CapacityScaler > 100 {
+					return fmt.Errorf("capacity_scaler for backend %q must be between 0 and 100 inclusive, but was %q; see https://cloud.google.com/load-balancing/docs/backend-service#capacity_scaler for details", cfg.Name, *cfg.CapacityScaler)
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -425,6 +461,13 @@ func getStatuses(namespace string, name string, annotations map[string]string, r
 		var tempConfig AutonegConfigTemp
 		if err = json.Unmarshal([]byte(tmp), &tempConfig); err != nil {
 			return
+		}
+
+		tmpSync, syncOk := annotations[autonegSyncAnnotation]
+		if syncOk {
+			if err = json.Unmarshal([]byte(tmpSync), &s.syncConfig); err != nil {
+				return
+			}
 		}
 
 		s.config.BackendServices = make(map[string]map[string]AutonegNEGConfig, len(tempConfig.BackendServices))

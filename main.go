@@ -44,8 +44,9 @@ import (
 const useragent = "google-pso-tool/gke-autoneg-controller/1.0.0"
 
 var (
-	scheme   = runtime.NewScheme()
-	setupLog = ctrl.Log.WithName("setup")
+	scheme    = runtime.NewScheme()
+	setupLog  = ctrl.Log.WithName("setup")
+	BuildTime string
 )
 
 func init() {
@@ -154,6 +155,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	setupLog.Info(fmt.Sprintf("Build time: %s", BuildTime))
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")
