@@ -127,12 +127,12 @@ func (b *ProdBackendController) getBackendService(name string, region string) (s
 
 }
 
-func (b *ProdBackendController) updateBackends(name string, region string, svc *compute.BackendService, forceCapacity bool) error {
+func (b *ProdBackendController) updateBackends(name string, region string, svc *compute.BackendService, forceCapacity map[int]bool) error {
 	if len(svc.Backends) == 0 {
 		svc.NullFields = []string{"Backends"}
 	} else {
-		if forceCapacity {
-			for _, be := range svc.Backends {
+		for beidx, be := range svc.Backends {
+			if fc, ok := forceCapacity[beidx]; ok && fc {
 				be.ForceSendFields = []string{"CapacityScaler"}
 			}
 		}
@@ -198,7 +198,7 @@ func checkOperation(op *compute.Operation) error {
 func (b *ProdBackendController) ReconcileBackends(actual, intended AutonegStatus) (err error) {
 	removes, upserts := ReconcileStatus(b.project, actual, intended)
 
-	var forceCapacity = false
+	var forceCapacity map[int]bool = make(map[int]bool, 0)
 	for port, _removes := range removes {
 		for idx, remove := range _removes {
 			var oldSvc *compute.BackendService
@@ -231,7 +231,7 @@ func (b *ProdBackendController) ReconcileBackends(actual, intended AutonegStatus
 
 			// If we are changing backend services, save the old service
 			if upsert.name != remove.name {
-				if err = b.updateBackends(remove.name, remove.region, oldSvc, false); err != nil {
+				if err = b.updateBackends(remove.name, remove.region, oldSvc, forceCapacity); err != nil {
 					return
 				}
 			}
@@ -239,7 +239,7 @@ func (b *ProdBackendController) ReconcileBackends(actual, intended AutonegStatus
 			// Add or update any new backends to the list
 			for _, u := range upsert.backends {
 				copy := true
-				for _, be := range newSvc.Backends {
+				for beidx, be := range newSvc.Backends {
 					if u.Group == be.Group {
 						// TODO: copy fields explicitly
 						be.MaxRatePerEndpoint = u.MaxRatePerEndpoint
@@ -248,11 +248,15 @@ func (b *ProdBackendController) ReconcileBackends(actual, intended AutonegStatus
 							var syncConfig AutonegSyncConfig = *intended.AutonegSyncConfig
 							if syncConfig.CapacityScaler != nil && *syncConfig.CapacityScaler == true {
 								be.CapacityScaler = u.CapacityScaler
-								forceCapacity = true
+								forceCapacity[beidx] = true
 							}
 						} else {
 							// Force CapacityScaler to an "empty value"
 							u.CapacityScaler = 0
+							// Check if existing capacity scaler is zero
+							if be.CapacityScaler == 0 {
+								forceCapacity[beidx] = true
+							}
 						}
 						copy = false
 						break
@@ -261,6 +265,11 @@ func (b *ProdBackendController) ReconcileBackends(actual, intended AutonegStatus
 				if copy {
 					// It's a new backend to be added
 					newBackend := u
+					if _, ok := intended.AutonegConfig.BackendServices[port][idx]; ok {
+						if intended.AutonegConfig.BackendServices[port][idx].InitialCapacity != nil {
+							forceCapacity[len(newSvc.Backends)] = true
+						}
+					}
 					newSvc.Backends = append(newSvc.Backends, &newBackend)
 				}
 			}
