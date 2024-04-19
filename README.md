@@ -117,7 +117,7 @@ gcloud projects add-iam-policy-binding \
   ${HOST_PROJECT_ID}
 ```
 
-Lastly, on each cluster in your project where you'd like to install `autoneg` (version `v0.9.7`), run these two commands:
+Lastly, on each cluster in your project where you'd like to install `autoneg` (version `v1.1.0`), run these two commands:
 ```
 kubectl apply -f deploy/autoneg.yaml
 
@@ -150,7 +150,7 @@ module "autoneg" {
   
   # NOTE: You may need to build your own image if you rely on features merged between releases, and do
   # not wish to use the `latest` image.
-  controller_image = "ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:v1.0.0"
+  controller_image = "ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:v1.1.0"
 }
 ```
 
