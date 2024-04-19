@@ -1,5 +1,5 @@
 /**
- * Copyright 2023 Google LLC
+ * Copyright 2024 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+variable "add_suffix" {
+  description = "Add suffix to resources"
+  type        = string
+  default     = ""
+}
 
 variable "project_create" {
   description = "Create project instead of using an existing one."
@@ -72,4 +78,5 @@ variable "vpc_subnets" {
 variable "autoneg_image" {
   type        = string
   description = "Autoneg image to use"
+  default     = "ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:latest"
 }

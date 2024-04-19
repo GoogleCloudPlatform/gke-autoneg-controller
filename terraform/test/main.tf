@@ -1,5 +1,5 @@
 /**
- * Copyright 2023 Google LLC
+ * Copyright 2024 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,13 @@
 
 locals {
   project_id      = var.project_create ? module.project.project_id : var.project_id
-  ilb_name        = "autoneg-test-ilb"
-  backend_service = "autoneg-test-be"
+  suffix          = var.add_suffix
+  ilb_name        = format("autoneg-test-ilb%s", local.suffix)
+  backend_service = format("autoneg-test-be%s", local.suffix)
 }
 
 module "project" {
-  source         = "github.com/GoogleCloudPlatform/cloud-foundation-fabric//modules/project?ref=daily-2023.03.14"
+  source         = "github.com/GoogleCloudPlatform/cloud-foundation-fabric//modules/project?ref=daily-2024.04.19"
   name           = var.project_id
   project_create = var.project_create
   services = [
@@ -37,12 +38,12 @@ module "project" {
 }
 
 module "vpc" {
-  source     = "github.com/GoogleCloudPlatform/cloud-foundation-fabric//modules/net-vpc?ref=daily-2023.03.14"
+  source     = "github.com/GoogleCloudPlatform/cloud-foundation-fabric//modules/net-vpc?ref=daily-2024.04.19"
   project_id = var.vpc_config.network_project != null ? var.vpc_config.network_project : local.project_id
-  name       = var.vpc_config.network
+  name       = format("%s%s", var.vpc_config.network, local.suffix)
   subnets = var.vpc_config.create ? [{
     ip_cidr_range = var.vpc_subnets.main_cidr_range
-    name          = var.vpc_config.subnetwork
+    name          = format("%s%s", var.vpc_config.subnetwork, local.suffix)
     region        = var.region
     secondary_ip_ranges = {
       (var.vpc_subnets.pods_name)     = var.vpc_subnets.pods_ip_cidr_range
@@ -53,7 +54,7 @@ module "vpc" {
   subnets_proxy_only = [
     {
       ip_cidr_range = var.vpc_subnets.proxy_only_cidr_range
-      name          = format("%s-proxy", var.vpc_config.network)
+      name          = format("%s-proxy%s", var.vpc_config.network, local.suffix)
       region        = var.region
       active        = true
     }
@@ -62,26 +63,26 @@ module "vpc" {
 }
 
 module "nat" {
-  source         = "github.com/GoogleCloudPlatform/cloud-foundation-fabric//modules/net-cloudnat?ref=daily-2023.03.14"
+  source         = "github.com/GoogleCloudPlatform/cloud-foundation-fabric//modules/net-cloudnat?ref=daily-2024.04.19"
   project_id     = local.project_id
   region         = var.region
-  name           = format("%s-nat", module.vpc.name)
+  name           = format("%s-nat%s", module.vpc.name, local.suffix)
   router_network = module.vpc.name
 }
 
 module "firewall" {
-  source               = "github.com/GoogleCloudPlatform/cloud-foundation-fabric//modules/net-vpc-firewall?ref=daily-2023.03.14"
+  source               = "github.com/GoogleCloudPlatform/cloud-foundation-fabric//modules/net-vpc-firewall?ref=daily-2024.04.19"
   project_id           = local.project_id
   network              = module.vpc.name
   default_rules_config = {}
   ingress_rules = {
-    allow-ingress-from-ilb = {
+    (format("allow-ingress-from-ilb%s", local.suffix)) = {
       description   = "Allow ingress from ILB"
       source_ranges = [var.vpc_subnets.proxy_only_cidr_range]
       targets       = ["autoneg-test"]
       rules         = [{ protocol = "tcp", port = 80 }]
     }
-    allow-ingress-healthchecks = {
+    (format("allow-ingress-healthchecks%s", local.suffix)) = {
       description   = "Allow healthcheck ranges."
       source_ranges = ["35.191.0.0/16", "130.211.0.0/22"]
       targets       = ["autoneg-test"]
@@ -91,9 +92,9 @@ module "firewall" {
 }
 
 module "cluster-service-account" {
-  source       = "github.com/GoogleCloudPlatform/cloud-foundation-fabric//modules/iam-service-account?ref=daily-2023.03.14"
+  source       = "github.com/GoogleCloudPlatform/cloud-foundation-fabric//modules/iam-service-account?ref=daily-2024.04.19"
   project_id   = local.project_id
-  name         = format("autoneg-test-sa")
+  name         = format("autoneg-test-sa%s", local.suffix)
   generate_key = false
   iam          = {}
   iam_project_roles = {
@@ -105,17 +106,17 @@ module "cluster-service-account" {
 }
 
 module "cluster" {
-  source = "github.com/GoogleCloudPlatform/cloud-foundation-fabric//modules/gke-cluster?ref=daily-2023.03.14"
+  source = "github.com/GoogleCloudPlatform/cloud-foundation-fabric//modules/gke-cluster-autopilot?ref=daily-2024.04.19"
 
   project_id = local.project_id
-  name       = "autoneg-test"
+  name       = format("autoneg-test%s", local.suffix)
   location   = var.region
 
   release_channel = "REGULAR"
 
   vpc_config = {
     network    = module.vpc.self_link
-    subnetwork = module.vpc.subnet_self_links[format("%s/%s", var.region, var.vpc_config.subnetwork)]
+    subnetwork = module.vpc.subnet_self_links[format("%s/%s%s", var.region, var.vpc_config.subnetwork, local.suffix)]
     secondary_range_names = {
       pods     = var.vpc_subnets.pods_name
       services = var.vpc_subnets.services_name
@@ -125,11 +126,14 @@ module "cluster" {
       internal-vms = "0.0.0.0/0"
     }
   }
-  max_pods_per_node = 32
 
   private_cluster_config = {
     enable_private_endpoint = false
     master_global_access    = false
+  }
+
+  node_config = {
+    tags = ["autoneg-test"]
   }
 
   enable_features = {
@@ -140,30 +144,6 @@ module "cluster" {
   labels = {
     environment = "test"
   }
-}
-
-module "cluster-nodepool" {
-  source     = "github.com/GoogleCloudPlatform/cloud-foundation-fabric//modules/gke-nodepool?ref=daily-2023.03.14"
-  project_id = local.project_id
-
-  cluster_name = module.cluster.name
-  location     = module.cluster.location
-  name         = "autoneg-test-nodepool-1"
-
-  service_account = {
-    email        = module.cluster-service-account.email
-    oauth_scopes = ["https://www.googleapis.com/auth/cloud-platform"]
-  }
-
-  node_config = {
-    machine_type = "e2-standard-4"
-    gvnic        = true
-  }
-  node_count = {
-    initial = 1
-  }
-
-  tags = ["autoneg-test"]
 }
 
 data "google_client_config" "provider" {}
@@ -177,19 +157,20 @@ provider "kubernetes" {
 }
 
 module "autoneg" {
-  source = "github.com/GoogleCloudPlatform/gke-autoneg-controller//terraform/autoneg?ref=kubebuilder3"
+  source = "../autoneg"
 
-  project_id = local.project_id
-
-  controller_image = var.autoneg_image
+  project_id                    = local.project_id
+  service_account_id            = format("autoneg%s", local.suffix)
+  controller_image              = var.autoneg_image
+  custom_role_add_random_suffix = local.suffix != "" ? true : false
 
   depends_on = [
-    module.cluster-nodepool.name
+    module.cluster
   ]
 }
 
 module "ilb" {
-  source     = "github.com/GoogleCloudPlatform/cloud-foundation-fabric//modules/net-ilb-l7?ref=daily-2023.03.14"
+  source     = "github.com/GoogleCloudPlatform/cloud-foundation-fabric//modules/net-lb-app-int?ref=daily-2024.04.19"
   name       = local.ilb_name
   project_id = local.project_id
   region     = var.region
@@ -214,7 +195,7 @@ module "ilb" {
 
   vpc_config = {
     network    = module.vpc.self_link
-    subnetwork = module.vpc.subnet_self_links[format("%s/%s", var.region, var.vpc_config.subnetwork)]
+    subnetwork = module.vpc.subnet_self_links[format("%s/%s%s", var.region, var.vpc_config.subnetwork, local.suffix)]
   }
 }
 

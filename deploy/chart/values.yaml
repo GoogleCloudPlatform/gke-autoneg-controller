@@ -47,6 +47,15 @@ kube_rbac_proxy:
   securityContext:
     allowPrivilegeEscalation: false
     privileged: false
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
   args:
     - --secure-listen-address=0.0.0.0:8443
     - --upstream=http://127.0.0.1:8080/
@@ -67,6 +76,15 @@ gke_autoneg_controller:
   securityContext:
     allowPrivilegeEscalation: false
     privileged: false
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
   livenessProbe:
     httpGet:
       path: /healthz

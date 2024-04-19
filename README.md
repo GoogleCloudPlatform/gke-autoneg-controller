@@ -129,6 +129,7 @@ This will create all the Kubernetes resources required to support `autoneg` and 
 ### Installation via Terraform
 
 You can use the Terraform module in `terraform/autoneg` to deploy Autoneg in a GKE cluster of your choice.
+An end-to-end example is provided in the [`terraform/test`](terraform/test) directory as well (simply set your `project_id`).
 
 Example:
 
@@ -150,6 +151,51 @@ module "autoneg" {
   # NOTE: You may need to build your own image if you rely on features merged between releases, and do
   # not wish to use the `latest` image.
   controller_image = "ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:v1.0.0"
+}
+```
+
+### Installation via Helm charts
+
+A Helm chart is also provided in [`deploy/chart`](deploy/chart) and via
+`https://googlecloudplatform.github.io/gke-autoneg-controller/` repository. 
+
+You can also use it with Terraform like this:
+
+```tf
+module "autoneg" {
+  source = "github.com/GoogleCloudPlatform/gke-autoneg-controller//terraform/gcp?ref=master"
+
+  project_id         = module.project.project_id
+  service_account_id = "autoneg"
+  workload_identity = {
+    namespace       = "autoneg-system"
+    service_account = "autoneg-controller-manager"
+  }
+  # To add shared VPC configuration, also set shared_vpc variable
+}
+
+resource "helm_release" "autoneg" {
+  name       = "autoneg"
+  chart      = "autoneg-controller-manager"
+  repository = "https://googlecloudplatform.github.io/gke-autoneg-controller/"
+  namespace  = "autoneg-system"
+
+  create_namespace = true
+
+  set {
+    name  = "createNamespace"
+    value = false
+  }
+  
+  set {
+    name  = "serviceAccount.annotations.iam\\.gke\\.io/gcp-service-account"
+    value = module.autoneg.service_account_email
+  }
+
+  set {
+    name  = "serviceAccount.automountServiceAccountToken"
+    value = true
+  }
 }
 ```
 
