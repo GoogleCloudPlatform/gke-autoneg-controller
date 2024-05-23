@@ -34,7 +34,7 @@ variable "image_pull_policy" {
 variable "kube_rbac_proxy_image" {
   type        = string
   description = "kuber-rbac-proxy container image"
-  default     = "gcr.io/kubebuilder/kube-rbac-proxy:v0.8.0"
+  default     = "gcr.io/kubebuilder/kube-rbac-proxy:v0.16.0"
 }
 
 variable "workload_identity" {

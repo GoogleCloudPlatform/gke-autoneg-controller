@@ -35,7 +35,7 @@ A Helm chart for autoneg-controller-manager.
 | kube_rbac_proxy.args[1] | string | `"--upstream=http://127.0.0.1:8080/"` |  |
 | kube_rbac_proxy.args[2] | string | `"--logtostderr=true"` |  |
 | kube_rbac_proxy.args[3] | string | `"--v=10"` |  |
-| kube_rbac_proxy.image | string | `"gcr.io/kubebuilder/kube-rbac-proxy:v0.8.0"` |  |
+| kube_rbac_proxy.image | string | `"gcr.io/kubebuilder/kube-rbac-proxy:v0.16.0"` |  |
 | kube_rbac_proxy.name | string | `"kube-rbac-proxy"` |  |
 | kube_rbac_proxy.port | int | `8443` |  |
 | kube_rbac_proxy.securityContext.allowPrivilegeEscalation | bool | `false` |  |
