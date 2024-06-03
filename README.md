@@ -83,6 +83,7 @@ The controller parameters can be customized via changing the [controller deploym
   `port` to avoid name collisions when truncated.
 * `--max-rate-per-endpoint`: optional. Sets a default value for max-rate-per-endpoint that can be overridden by user config. Defaults to 0.
 * `--max-connections-per-endpoint`: optional. Same as above but for connections.
+* `--namespaces`: optional. Comma-separated list of namespaces to reconcile.
 * `--always-reconcile`: optional. Makes it possible to reconcile periodically even if the status annotations don't change. Defaults to false.
 * `--reconcile-period`: optional. Sets a reconciliation duration if always-reconcile mode is on. Defaults to 10 hours.
 
