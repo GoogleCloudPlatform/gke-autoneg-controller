@@ -43,7 +43,7 @@ service:
 # https://github.com/kubernetes-sigs/kubebuilder/issues/3524#issuecomment-1687893746
 kube_rbac_proxy:
   name: kube-rbac-proxy
-  image: gcr.io/kubebuilder/kube-rbac-proxy:v0.8.0
+  image: gcr.io/kubebuilder/kube-rbac-proxy:v0.16.0
   securityContext:
     allowPrivilegeEscalation: false
     privileged: false
