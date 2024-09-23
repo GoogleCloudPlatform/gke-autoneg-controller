@@ -159,6 +159,12 @@ module "autoneg" {
 A Helm chart is also provided in [`deploy/chart`](deploy/chart) and via
 `https://googlecloudplatform.github.io/gke-autoneg-controller/` repository. 
 
+To deploy via command line, simply run:
+
+```sh
+# helm install -n autoneg-system --create-namespace --set 'createNamespace=false' autoneg deploy/chart/ 
+```
+
 You can also use it with Terraform like this:
 
 ```tf
