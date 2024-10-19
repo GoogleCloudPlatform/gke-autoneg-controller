@@ -42,13 +42,14 @@ type ServiceReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 	BackendController
-	Recorder                         record.EventRecorder
-	ServiceNameTemplate              string
-	AllowServiceName                 bool
-	MaxRatePerEndpointDefault        float64
-	MaxConnectionsPerEndpointDefault float64
-	AlwaysReconcile                  bool
-	ReconcileDuration                *time.Duration
+	Recorder                          record.EventRecorder
+	ServiceNameTemplate               string
+	AllowServiceName                  bool
+	MaxRatePerEndpointDefault         float64
+	MaxConnectionsPerEndpointDefault  float64
+	AlwaysReconcile                   bool
+	ReconcileDuration                 *time.Duration
+	DeregisterNEGsOnAnnotationRemoval bool
 }
 
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;update;patch
