@@ -166,6 +166,14 @@ var statusTests = []struct {
 		true,
 		true,
 	},
+	{
+		"valid autoneg status without autoneg",
+		map[string]string{
+			autonegStatusAnnotation: validStatus,
+		},
+		true,
+		false,
+	},
 }
 
 var oldStatusTests = []struct {
@@ -256,12 +264,21 @@ var oldStatusTests = []struct {
 		true,
 		false,
 	},
+	{
+		"(legacy) valid autoneg status without autoneg",
+		map[string]string{
+			oldAutonegStatusAnnotation: validStatus,
+		},
+		true,
+		false,
+	},
 }
 
 func TestGetStatuses(t *testing.T) {
 	var serviceReconciler = ServiceReconciler{
-		ServiceNameTemplate: "{namespace}-{name}-{port}-{hash}",
-		AllowServiceName:    true,
+		ServiceNameTemplate:               "{namespace}-{name}-{port}-{hash}",
+		AllowServiceName:                  true,
+		DeregisterNEGsOnAnnotationRemoval: true,
 	}
 	for _, st := range statusTests {
 		_, valid, err := getStatuses("ns", "test", st.annotations, &serviceReconciler)
@@ -282,8 +299,9 @@ func TestGetStatuses(t *testing.T) {
 
 func TestGetOldStatuses(t *testing.T) {
 	var serviceReconciler = ServiceReconciler{
-		ServiceNameTemplate: "{namespace}-{name}-{port}-{hash}",
-		AllowServiceName:    true,
+		ServiceNameTemplate:               "{namespace}-{name}-{port}-{hash}",
+		AllowServiceName:                  true,
+		DeregisterNEGsOnAnnotationRemoval: true,
 	}
 	for _, st := range oldStatusTests {
 		_, valid, err := getStatuses("ns", "test", st.annotations, &serviceReconciler)
@@ -338,6 +356,52 @@ func TestGetStatusesServiceNameAllowed(t *testing.T) {
 	if !ok {
 		t.Errorf("Expected service config for http-be but got none, service statuses: \n%v", statuses.config.BackendServices)
 	}
+}
+
+func TestGetStatusesOnlyAutonegStatusAnnotation(t *testing.T) {
+	var serviceReconciler = ServiceReconciler{
+		ServiceNameTemplate:               "{namespace}-{name}-{port}-{hash}",
+		AllowServiceName:                  true,
+		DeregisterNEGsOnAnnotationRemoval: true,
+	}
+	statuses, valid, err := getStatuses("ns", "test", map[string]string{autonegStatusAnnotation: validAutonegStatus}, &serviceReconciler)
+	if err != nil {
+		t.Errorf("Expected no error, got one: %v", err)
+	}
+	if !valid {
+		t.Errorf("Expected autoneg status config, got none")
+	}
+
+	if !statuses.newConfig {
+		t.Errorf("Expected new autoneg config")
+	}
+	if statuses.config.BackendServices != nil {
+		t.Errorf("Expected nil backend services")
+	}
+
+}
+
+func TestGetStatusesOnlyOldAutonegStatusAnnotation(t *testing.T) {
+	var serviceReconciler = ServiceReconciler{
+		ServiceNameTemplate:               "{namespace}-{name}-{port}-{hash}",
+		AllowServiceName:                  true,
+		DeregisterNEGsOnAnnotationRemoval: true,
+	}
+	statuses, valid, err := getStatuses("ns", "test", map[string]string{oldAutonegStatusAnnotation: validAutonegStatus}, &serviceReconciler)
+	if err != nil {
+		t.Errorf("Expected no error, got one: %v", err)
+	}
+	if !valid {
+		t.Errorf("Expected old autoneg status config, got none")
+	}
+
+	if statuses.newConfig {
+		t.Errorf("Expected old autoneg config")
+	}
+	if statuses.oldConfig.Name != "" {
+		t.Errorf("Expected empty old autoneg config")
+	}
+
 }
 
 func TestDefaultMaxRatePerEndpointWhenOverrideIsSet(t *testing.T) {
