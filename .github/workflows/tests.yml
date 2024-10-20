@@ -17,12 +17,6 @@ on:
   schedule:
     - cron: "45 2 * * *"
   pull_request:
-    branches:
-      - master
-    tags:
-      - ci
-      - test
-
 
 jobs:
   tests:
