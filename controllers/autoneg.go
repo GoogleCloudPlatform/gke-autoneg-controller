@@ -507,16 +507,24 @@ func getStatuses(namespace string, name string, annotations map[string]string, r
 		}
 
 		s.newConfig = true
+	}
 
-		tmp, ok = annotations[autonegStatusAnnotation]
-		if ok {
-			// Found a status, decode
-			if err = json.Unmarshal([]byte(tmp), &s.status); err != nil {
-				return
-			}
+	// Does service has new auto neg status?
+	tmp, statusOk := annotations[autonegStatusAnnotation]
+	if statusOk {
+		// Status annotation found but auto neg annotation not found set empty auto neg config
+		if !newOk && r.DeregisterNEGsOnAnnotationRemoval {
+			s.config = AutonegConfig{}
+			valid = true
+			s.newConfig = true
+		}
+		// Found a status, decode
+		if err = json.Unmarshal([]byte(tmp), &s.status); err != nil {
+			return
 		}
 	}
-	if !newOk {
+
+	if !newOk && !statusOk {
 		// Is this service using autoneg in legacy mode?
 		tmp, oldOk = annotations[oldAutonegAnnotation]
 		if oldOk {
@@ -554,13 +562,18 @@ func getStatuses(namespace string, name string, annotations map[string]string, r
 				err = errors.New(fmt.Sprintf("more than one port in %s, but autoneg configuration is for one or no ports", negAnnotation))
 				return
 			}
+		}
 
-			tmp, ok = annotations[oldAutonegStatusAnnotation]
-			if ok {
-				// Found a status, decode
-				if err = json.Unmarshal([]byte(tmp), &s.oldStatus); err != nil {
-					return
-				}
+		tmp, ok = annotations[oldAutonegStatusAnnotation]
+		if ok {
+			// Status annotation found but auto neg annotation not found set empty auto neg config
+			if !oldOk && r.DeregisterNEGsOnAnnotationRemoval {
+				s.oldConfig = OldAutonegConfig{}
+				valid = true
+			}
+			// Found a status, decode
+			if err = json.Unmarshal([]byte(tmp), &s.oldStatus); err != nil {
+				return
 			}
 		}
 	}

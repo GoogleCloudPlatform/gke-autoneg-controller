@@ -68,6 +68,7 @@ func main() {
 	var alwaysReconcile bool
 	var reconcilePeriod string
 	var namespaces string
+	var deregisterNEGsOnAnnotationRemoval bool
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.Float64Var(&maxRatePerEndpointDefault, "max-rate-per-endpoint", 0, "Default max rate per endpoint. Can be overridden by user config.")
@@ -82,6 +83,8 @@ func main() {
 	flag.BoolVar(&allowServiceName, "enable-custom-service-names", true, "Enable using custom service names in autoneg annotation.")
 	flag.BoolVar(&alwaysReconcile, "always-reconcile", false, "Periodically reconciles even if annotation statuses don't change.")
 	flag.StringVar(&reconcilePeriod, "reconcile-period", "", "The minimum frequency at which watched resources are reconciled, e.g. 10m. Defaults to 10h if not set.")
+	flag.BoolVar(&deregisterNEGsOnAnnotationRemoval, "deregister-negs-on-annotation-removal", true, "Deregister NEGs from backend service when annotation removed.")
+
 	opts := zap.Options{
 		Development: true,
 	}
@@ -141,16 +144,17 @@ func main() {
 	}
 
 	if err = (&controllers.ServiceReconciler{
-		Client:                           mgr.GetClient(),
-		Scheme:                           mgr.GetScheme(),
-		BackendController:                controllers.NewBackendController(project, s),
-		Recorder:                         mgr.GetEventRecorderFor("autoneg-controller"),
-		ServiceNameTemplate:              serviceNameTemplate,
-		AllowServiceName:                 allowServiceName,
-		MaxRatePerEndpointDefault:        maxRatePerEndpointDefault,
-		MaxConnectionsPerEndpointDefault: maxConnectionsPerEndpointDefault,
-		AlwaysReconcile:                  alwaysReconcile,
-		ReconcileDuration:                &reconcileDuration,
+		Client:                            mgr.GetClient(),
+		Scheme:                            mgr.GetScheme(),
+		BackendController:                 controllers.NewBackendController(project, s),
+		Recorder:                          mgr.GetEventRecorderFor("autoneg-controller"),
+		ServiceNameTemplate:               serviceNameTemplate,
+		AllowServiceName:                  allowServiceName,
+		MaxRatePerEndpointDefault:         maxRatePerEndpointDefault,
+		MaxConnectionsPerEndpointDefault:  maxConnectionsPerEndpointDefault,
+		AlwaysReconcile:                   alwaysReconcile,
+		DeregisterNEGsOnAnnotationRemoval: deregisterNEGsOnAnnotationRemoval,
+		ReconcileDuration:                 &reconcileDuration,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Service")
 		os.Exit(1)
