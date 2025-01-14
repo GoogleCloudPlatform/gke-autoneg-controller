@@ -203,7 +203,17 @@ func (b *ProdBackendController) ReconcileBackends(actual, intended AutonegStatus
 		for idx, remove := range _removes {
 			var oldSvc *compute.BackendService
 			oldSvc, err = b.getBackendService(remove.name, remove.region)
-			if err != nil {
+			var svcUpdated = false
+			var e *errNotFound
+			if errors.As(err, &e) {
+				// If the backend service is gone, we construct a BackendService with the same name
+				// and an empty list of backends.
+				err = nil
+				oldSvc = &compute.BackendService{
+					Name:     remove.name,
+					Backends: make([]*compute.Backend, 0),
+				}
+			} else if err != nil {
 				return
 			}
 
@@ -222,6 +232,7 @@ func (b *ProdBackendController) ReconcileBackends(actual, intended AutonegStatus
 			for _, d := range remove.backends {
 				for i, be := range oldSvc.Backends {
 					if d.Group == be.Group {
+						svcUpdated = true
 						copy(oldSvc.Backends[i:], oldSvc.Backends[i+1:])
 						oldSvc.Backends = oldSvc.Backends[:len(oldSvc.Backends)-1]
 						break
@@ -230,7 +241,7 @@ func (b *ProdBackendController) ReconcileBackends(actual, intended AutonegStatus
 			}
 
 			// If we are changing backend services, save the old service
-			if upsert.name != remove.name {
+			if upsert.name != remove.name && svcUpdated {
 				if err = b.updateBackends(remove.name, remove.region, oldSvc, forceCapacity); err != nil {
 					return
 				}
@@ -273,7 +284,9 @@ func (b *ProdBackendController) ReconcileBackends(actual, intended AutonegStatus
 					newSvc.Backends = append(newSvc.Backends, &newBackend)
 				}
 			}
-			err = b.updateBackends(upsert.name, upsert.region, newSvc, forceCapacity)
+			if len(upsert.backends) > 0 {
+				err = b.updateBackends(upsert.name, upsert.region, newSvc, forceCapacity)
+			}
 			if err != nil {
 				return err
 			}

@@ -17,7 +17,11 @@ limitations under the License.
 package controllers
 
 import (
+	"context"
+	"google.golang.org/api/option"
 	"math"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
@@ -977,5 +981,28 @@ func Test_checkOperation(t *testing.T) {
 		if (err == nil && !tt.noErr) || (err != nil && tt.noErr) {
 			t.Errorf("%d: failed.", i+1)
 		}
+	}
+}
+
+func TestReconcileBackendsDeletionWithMissingBackend(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		// Return not found on backend service get.
+		res.WriteHeader(http.StatusNotFound)
+	}))
+	cs, err := compute.NewService(context.Background(), option.WithEndpoint(s.URL), option.WithoutAuthentication())
+	if err != nil {
+		t.Fatalf("Failed to instantiate compute service: %v", err)
+	}
+	bc := ProdBackendController{
+		project: "test-project",
+		s:       cs,
+	}
+	err = bc.ReconcileBackends(statusBasicWithNEGs, AutonegStatus{
+		// On deletion, the intended state is set to empty.
+		AutonegConfig: AutonegConfig{},
+		NEGStatus:     negStatus,
+	})
+	if err != nil {
+		t.Errorf("ReconcileBackends() got err: %v, want none", err)
 	}
 }
