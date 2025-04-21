@@ -68,6 +68,7 @@ func main() {
 	var alwaysReconcile bool
 	var reconcilePeriod string
 	var namespaces string
+	var project string
 	var deregisterNEGsOnAnnotationRemoval bool
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -84,6 +85,7 @@ func main() {
 	flag.BoolVar(&alwaysReconcile, "always-reconcile", false, "Periodically reconciles even if annotation statuses don't change.")
 	flag.StringVar(&reconcilePeriod, "reconcile-period", "", "The minimum frequency at which watched resources are reconciled, e.g. 10m. Defaults to 10h if not set.")
 	flag.BoolVar(&deregisterNEGsOnAnnotationRemoval, "deregister-negs-on-annotation-removal", true, "Deregister NEGs from backend service when annotation removed.")
+	flag.StringVar(&project, "project-id", "", "The project ID of the Google Cloud project where the backend services are created. If not specified, project ID will be fetched from the Metadata server.")
 
 	opts := zap.Options{
 		Development: true,
@@ -102,10 +104,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	project := getProject()
+	// Use the user-provided project-ID if specified.
 	if project == "" {
-		setupLog.Error(err, "can't determine project ID")
-		os.Exit(1)
+		project = getProject()
+		if project == "" {
+			setupLog.Error(err, "can't determine project ID")
+			os.Exit(1)
+		}
 	}
 
 	var reconcileDuration time.Duration
