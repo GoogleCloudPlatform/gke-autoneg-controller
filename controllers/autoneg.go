@@ -17,13 +17,14 @@ limitations under the License.
 package controllers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
 	"time"
 
-	"github.com/cenkalti/backoff"
+	backoff "github.com/cenkalti/backoff/v5"
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/googleapi"
 )
@@ -145,16 +146,15 @@ func (b *ProdBackendController) updateBackends(name string, region string, svc *
 		if err != nil {
 			return err
 		}
-		bo := backoff.NewExponentialBackOff()
-		bo.MaxElapsedTime = maxElapsedTime
-		err = backoff.Retry(
-			func() error {
-				op, err := compute.NewGlobalOperationsService(b.s).Get(b.project, res.Name).Do()
-				if err != nil {
-					return err
-				}
-				return checkOperation(op)
-			}, bo)
+		operation := func() (bool, error) {
+			op, err := compute.NewGlobalOperationsService(b.s).Get(b.project, res.Name).Do()
+			if err != nil {
+				return false, err
+			}
+			return true, checkOperation(op)
+		}
+		_, err = backoff.Retry(context.TODO(),
+			operation, backoff.WithBackOff(backoff.NewExponentialBackOff()), backoff.WithMaxElapsedTime(maxElapsedTime))
 		return err
 	} else {
 		p := compute.NewRegionBackendServicesService(b.s).Patch(b.project, region, name, svc)
@@ -163,16 +163,15 @@ func (b *ProdBackendController) updateBackends(name string, region string, svc *
 		if err != nil {
 			return err
 		}
-		bo := backoff.NewExponentialBackOff()
-		bo.MaxElapsedTime = maxElapsedTime
-		err = backoff.Retry(
-			func() error {
-				op, err := compute.NewRegionOperationsService(b.s).Get(b.project, region, res.Name).Do()
-				if err != nil {
-					return err
-				}
-				return checkOperation(op)
-			}, bo)
+		operation := func() (bool, error) {
+			op, err := compute.NewRegionOperationsService(b.s).Get(b.project, region, res.Name).Do()
+			if err != nil {
+				return false, err
+			}
+			return true, checkOperation(op)
+		}
+		_, err = backoff.Retry(context.TODO(), operation,
+			backoff.WithBackOff(backoff.NewExponentialBackOff()), backoff.WithMaxElapsedTime(maxElapsedTime))
 		return err
 	}
 }

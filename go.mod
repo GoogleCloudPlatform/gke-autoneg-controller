@@ -1,10 +1,12 @@
 module github.com/GoogleCloudPlatform/gke-autoneg-controller
 
-go 1.18
+go 1.23
+
+toolchain go1.24.2
 
 require (
 	cloud.google.com/go/compute/metadata v0.2.3
-	github.com/cenkalti/backoff v2.2.1+incompatible
+	github.com/cenkalti/backoff/v5 v5.0.2
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.27.7
 	google.golang.org/api v0.138.0
