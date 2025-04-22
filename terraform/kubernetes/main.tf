@@ -296,7 +296,7 @@ resource "kubernetes_deployment" "deployment_autoneg_controller_manager" {
           image             = var.controller_image
           image_pull_policy = var.image_pull_policy
 
-          args    = ["--health-probe-bind-address=:8081", "--metrics-bind-address=127.0.0.1:8080", "--leader-elect", "--zap-encoder=json"]
+          args    = ["--health-probe-bind-address=:8081", "--metrics-bind-address=:8443", "--leader-elect", "--zap-encoder=json"]
           command = ["/manager"]
 
           security_context {
@@ -341,36 +341,6 @@ resource "kubernetes_deployment" "deployment_autoneg_controller_manager" {
               cpu    = "100m"
               memory = "20Mi"
             }
-          }
-        }
-
-        container {
-          name = "kube-rbac-proxy"
-
-          image             = var.kube_rbac_proxy_image
-          image_pull_policy = var.image_pull_policy
-
-          args = ["--secure-listen-address=0.0.0.0:8443", "--upstream=http://127.0.0.1:8080/", "--logtostderr=true", "--v=10"]
-
-          security_context {
-            allow_privilege_escalation = false
-            privileged                 = false
-            capabilities {
-              drop = ["ALL"]
-            }
-            read_only_root_filesystem = true
-            run_as_non_root           = true
-            run_as_user               = 65532
-            run_as_group              = 65532
-            seccomp_profile {
-              type = "RuntimeDefault"
-            }
-          }
-
-          port {
-            container_port = 8443
-            name           = "https"
-            protocol       = "TCP"
           }
         }
       }
