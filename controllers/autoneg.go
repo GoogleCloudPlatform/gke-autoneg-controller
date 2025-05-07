@@ -249,7 +249,7 @@ func (b *ProdBackendController) ReconcileBackends(actual, intended AutonegStatus
 			// Add or update any new backends to the list
 			for _, u := range upsert.backends {
 				copy := true
-				for beidx, be := range newSvc.Backends {
+				for _, be := range newSvc.Backends {
 					if u.Group == be.Group {
 						// TODO: copy fields explicitly
 						be.MaxRatePerEndpoint = u.MaxRatePerEndpoint
@@ -258,15 +258,10 @@ func (b *ProdBackendController) ReconcileBackends(actual, intended AutonegStatus
 							var syncConfig AutonegSyncConfig = *intended.AutonegSyncConfig
 							if syncConfig.CapacityScaler != nil && *syncConfig.CapacityScaler == true {
 								be.CapacityScaler = u.CapacityScaler
-								forceCapacity[beidx] = true
 							}
 						} else {
 							// Force CapacityScaler to an "empty value"
 							u.CapacityScaler = 0
-							// Check if existing capacity scaler is zero
-							if be.CapacityScaler == 0 {
-								forceCapacity[beidx] = true
-							}
 						}
 						copy = false
 						break
@@ -281,6 +276,11 @@ func (b *ProdBackendController) ReconcileBackends(actual, intended AutonegStatus
 						}
 					}
 					newSvc.Backends = append(newSvc.Backends, &newBackend)
+				}
+			}
+			for beidx, be := range newSvc.Backends {
+				if be.CapacityScaler == 0 {
+					forceCapacity[beidx] = true
 				}
 			}
 			if len(upsert.backends) > 0 {
