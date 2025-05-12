@@ -77,7 +77,7 @@ The controller parameters can be customized via changing the [controller deploym
 * `--enable-custom-service-names`: optional. Enables defining the backend service name in the `autoneg` annotation. If set to `false` (via 
   `--enable-custom-service-names=false`), the `name` option will be ignored in the `autoneg` annotation and the backend service name will
   be determined via `default-backendservice-name` (see below).
-* `--default-backendservice-name`: optional. Sets the backend service name if it's not specified or if `--enable-customer-service-names` is set 
+* `--default-backendservice-name`: optional. Sets the backend service name if it's not specified or if `--enable-custom-service-names` is set 
   to false. The template defaults to `{name}-{port}`. It can contain `namespace`, `name`, `port` and `hash` and the non-hash values will be 
   truncated evenly if the full name is longer than 63 characters. `<hash>` is generated using full length `namespace`, `name` and 
   `port` to avoid name collisions when truncated.
