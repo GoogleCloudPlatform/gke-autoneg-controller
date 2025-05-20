@@ -70,17 +70,6 @@ spec:
       {{- end }}
       {{- end }}
       containers:
-        {{- if .Values.kube_rbac_proxy }}
-        - name: {{ .Values.kube_rbac_proxy.name }}
-          image: {{ .Values.kube_rbac_proxy.image | quote }}
-          securityContext:
-            {{- toYaml .Values.kube_rbac_proxy.securityContext | nindent 12 }}
-          args:
-            {{- toYaml .Values.kube_rbac_proxy.args | nindent 12 }}
-          ports:
-            - name: https
-              containerPort: {{ .Values.kube_rbac_proxy.port | default 8443 }}
-        {{- end }}
         - name: {{ .Values.gke_autoneg_controller.name }}
           image: {{ .Values.gke_autoneg_controller.image | quote }}
           securityContext:
