@@ -27,6 +27,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/ingress-gce/pkg/apis/svcneg/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -50,6 +51,7 @@ type ServiceReconciler struct {
 	AlwaysReconcile                   bool
 	ReconcileDuration                 *time.Duration
 	DeregisterNEGsOnAnnotationRemoval bool
+	UseSvcNeg                         bool
 }
 
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;update;patch
@@ -80,7 +82,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return r.reconcileResult(err)
 	}
 
-	status, ok, err := getStatuses(svc.Namespace, svc.Name, svc.ObjectMeta.Annotations, r)
+	status, ok, err := getStatuses(ctx, svc.Namespace, svc.Name, svc.ObjectMeta.Annotations, r)
 	// Is this service using autoneg?
 	if !ok {
 		return r.reconcileResult(nil)
@@ -137,6 +139,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Write changes to the service object.
 	if deleting {
 		// Remove finalizer and clear status
+		logger.Info("Removing finalizer")
 		svc.ObjectMeta.Finalizers = removeString(svc.ObjectMeta.Finalizers, oldAutonegFinalizer)
 		svc.ObjectMeta.Finalizers = removeString(svc.ObjectMeta.Finalizers, autonegFinalizer)
 		delete(svc.ObjectMeta.Annotations, autonegStatusAnnotation)
@@ -207,6 +210,12 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if r.UseSvcNeg {
+		return ctrl.NewControllerManagedBy(mgr).
+			For(&corev1.Service{}).
+			Owns(&v1beta1.ServiceNetworkEndpointGroup{}).
+			Complete(r)
+	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Service{}).
 		Complete(r)

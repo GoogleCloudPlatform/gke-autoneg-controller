@@ -34,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/ingress-gce/pkg/apis/svcneg/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -69,6 +70,7 @@ func main() {
 	var reconcilePeriod string
 	var namespaces string
 	var project string
+	var useSvcNeg bool
 	var deregisterNEGsOnAnnotationRemoval bool
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -86,13 +88,16 @@ func main() {
 	flag.StringVar(&reconcilePeriod, "reconcile-period", "", "The minimum frequency at which watched resources are reconciled, e.g. 10m. Defaults to 10h if not set.")
 	flag.BoolVar(&deregisterNEGsOnAnnotationRemoval, "deregister-negs-on-annotation-removal", true, "Deregister NEGs from backend service when annotation removed.")
 	flag.StringVar(&project, "project-id", "", "The project ID of the Google Cloud project where the backend services are created. If not specified, project ID will be fetched from the Metadata server.")
-
+	flag.BoolVar(&useSvcNeg, "use-svcneg", false, "Use service neg custom resource to get the NEG zone info.")
 	opts := zap.Options{
 		Development: true,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
+	if useSvcNeg {
+		utilruntime.Must(v1beta1.AddToScheme(scheme))
+	}
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -160,6 +165,7 @@ func main() {
 		AlwaysReconcile:                   alwaysReconcile,
 		DeregisterNEGsOnAnnotationRemoval: deregisterNEGsOnAnnotationRemoval,
 		ReconcileDuration:                 &reconcileDuration,
+		UseSvcNeg:                         useSvcNeg,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Service")
 		os.Exit(1)
