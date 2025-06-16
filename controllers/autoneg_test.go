@@ -18,14 +18,19 @@ package controllers
 
 import (
 	"context"
-	"google.golang.org/api/option"
 	"math"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"testing"
 
+	"google.golang.org/api/option"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"google.golang.org/api/compute/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/ingress-gce/pkg/apis/svcneg/v1beta1"
 	"k8s.io/utils/pointer"
 )
 
@@ -285,7 +290,7 @@ func TestGetStatuses(t *testing.T) {
 		DeregisterNEGsOnAnnotationRemoval: true,
 	}
 	for _, st := range statusTests {
-		_, valid, err := getStatuses("ns", "test", st.annotations, &serviceReconciler)
+		_, valid, err := getStatuses(context.Background(), "ns", "test", st.annotations, &serviceReconciler)
 		if err != nil && !st.err {
 			t.Errorf("Set %q: expected no error, got one: %v", st.name, err)
 		}
@@ -308,7 +313,7 @@ func TestGetOldStatuses(t *testing.T) {
 		DeregisterNEGsOnAnnotationRemoval: true,
 	}
 	for _, st := range oldStatusTests {
-		_, valid, err := getStatuses("ns", "test", st.annotations, &serviceReconciler)
+		_, valid, err := getStatuses(context.Background(), "ns", "test", st.annotations, &serviceReconciler)
 		if err != nil && !st.err {
 			t.Errorf("Set %q: expected no error, got one: %v", st.name, err)
 		}
@@ -330,7 +335,7 @@ func TestGetStatusesServiceNameNotAllowed(t *testing.T) {
 		AllowServiceName:    false,
 	}
 	validConf := `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":100}]}}`
-	statuses, valid, err := getStatuses("ns", "test", map[string]string{autonegAnnotation: validConf}, &serviceReconciler)
+	statuses, valid, err := getStatuses(context.Background(), "ns", "test", map[string]string{autonegAnnotation: validConf}, &serviceReconciler)
 	if err != nil {
 		t.Errorf("Expected no error, got one: %v", err)
 	}
@@ -349,7 +354,7 @@ func TestGetStatusesServiceNameAllowed(t *testing.T) {
 		AllowServiceName:    true,
 	}
 	validConf := `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":100}]}}`
-	statuses, valid, err := getStatuses("ns", "test", map[string]string{autonegAnnotation: validConf}, &serviceReconciler)
+	statuses, valid, err := getStatuses(context.Background(), "ns", "test", map[string]string{autonegAnnotation: validConf}, &serviceReconciler)
 	if err != nil {
 		t.Errorf("Expected no error, got one: %v", err)
 	}
@@ -368,7 +373,7 @@ func TestGetStatusesOnlyAutonegStatusAnnotation(t *testing.T) {
 		AllowServiceName:                  true,
 		DeregisterNEGsOnAnnotationRemoval: true,
 	}
-	statuses, valid, err := getStatuses("ns", "test", map[string]string{autonegStatusAnnotation: validAutonegStatus}, &serviceReconciler)
+	statuses, valid, err := getStatuses(context.Background(), "ns", "test", map[string]string{autonegStatusAnnotation: validAutonegStatus}, &serviceReconciler)
 	if err != nil {
 		t.Errorf("Expected no error, got one: %v", err)
 	}
@@ -391,7 +396,7 @@ func TestGetStatusesOnlyOldAutonegStatusAnnotation(t *testing.T) {
 		AllowServiceName:                  true,
 		DeregisterNEGsOnAnnotationRemoval: true,
 	}
-	statuses, valid, err := getStatuses("ns", "test", map[string]string{oldAutonegStatusAnnotation: validAutonegStatus}, &serviceReconciler)
+	statuses, valid, err := getStatuses(context.Background(), "ns", "test", map[string]string{oldAutonegStatusAnnotation: validAutonegStatus}, &serviceReconciler)
 	if err != nil {
 		t.Errorf("Expected no error, got one: %v", err)
 	}
@@ -415,7 +420,7 @@ func TestDefaultMaxRatePerEndpointWhenOverrideIsSet(t *testing.T) {
 		MaxRatePerEndpointDefault: 1234,
 	}
 	validConf := `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":100}]}}`
-	statuses, valid, err := getStatuses("ns", "test", map[string]string{autonegAnnotation: validConf}, &serviceReconciler)
+	statuses, valid, err := getStatuses(context.Background(), "ns", "test", map[string]string{autonegAnnotation: validConf}, &serviceReconciler)
 	if err != nil {
 		t.Errorf("Expected no error, got one: %v", err)
 	}
@@ -438,7 +443,7 @@ func TestDefaultMaxRatePerEndpointWhenOverrideIsNotSet(t *testing.T) {
 		MaxRatePerEndpointDefault: 1234,
 	}
 	validConf := `{"backend_services":{"80":[{"name":"http-be"}]}}`
-	statuses, valid, err := getStatuses("ns", "test", map[string]string{autonegAnnotation: validConf}, &serviceReconciler)
+	statuses, valid, err := getStatuses(context.Background(), "ns", "test", map[string]string{autonegAnnotation: validConf}, &serviceReconciler)
 	if err != nil {
 		t.Errorf("Expected no error, got one: %v", err)
 	}
@@ -461,7 +466,7 @@ func TestDefaultConnectionPerEndpointWhenOverrideIsSet(t *testing.T) {
 		MaxConnectionsPerEndpointDefault: 1234,
 	}
 	validConf := `{"backend_services":{"80":[{"name":"http-be","max_connections_per_endpoint":100}]}}`
-	statuses, valid, err := getStatuses("ns", "test", map[string]string{autonegAnnotation: validConf}, &serviceReconciler)
+	statuses, valid, err := getStatuses(context.Background(), "ns", "test", map[string]string{autonegAnnotation: validConf}, &serviceReconciler)
 	if err != nil {
 		t.Errorf("Expected no error, got one: %v", err)
 	}
@@ -484,7 +489,7 @@ func TestDefaultMaxConnectionsEndpointWhenOverrideIsNotSet(t *testing.T) {
 		MaxConnectionsPerEndpointDefault: 1234,
 	}
 	validConf := `{"backend_services":{"80":[{"name":"http-be"}]}}`
-	statuses, valid, err := getStatuses("ns", "test", map[string]string{autonegAnnotation: validConf}, &serviceReconciler)
+	statuses, valid, err := getStatuses(context.Background(), "ns", "test", map[string]string{autonegAnnotation: validConf}, &serviceReconciler)
 	if err != nil {
 		t.Errorf("Expected no error, got one: %v", err)
 	}
@@ -1004,5 +1009,83 @@ func TestReconcileBackendsDeletionWithMissingBackend(t *testing.T) {
 	})
 	if err != nil {
 		t.Errorf("ReconcileBackends() got err: %v, want none", err)
+	}
+}
+
+type fakeReader struct {
+	client.Reader
+	svcNeg *v1beta1.ServiceNetworkEndpointGroup
+	getErr error
+}
+
+func (r *fakeReader) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+	if r.svcNeg != nil {
+		r.svcNeg.DeepCopyInto(obj.(*v1beta1.ServiceNetworkEndpointGroup))
+	}
+	return r.getErr
+}
+
+func TestZonesFromSvcNeg(t *testing.T) {
+	tests := []struct {
+		name         string
+		negStatus    *NEGStatus
+		svcNeg       *v1beta1.ServiceNetworkEndpointGroup
+		getSvcNegErr error
+		wantZones    []string
+		wantErr      bool
+	}{
+		{
+			name: "success",
+			svcNeg: &v1beta1.ServiceNetworkEndpointGroup{
+				Status: v1beta1.ServiceNetworkEndpointGroupStatus{
+					NetworkEndpointGroups: []v1beta1.NegObjectReference{
+						{
+							SelfLink: "https://www.googleapis.com/compute/beta/projects/test-project/zones/zone1/networkEndpointGroups/neg_name",
+						},
+						{
+							SelfLink: "https://www.googleapis.com/compute/beta/projects/test-project/zones/zone2/networkEndpointGroups/neg_name",
+						},
+					},
+				},
+			},
+			negStatus: &NEGStatus{
+				NEGs: map[string]string{"80": fakeNeg, "90": fakeNeg2},
+			},
+			wantZones: []string{"zone1", "zone2"},
+			wantErr:   false,
+		},
+		{
+			name:         "svcneg not found",
+			getSvcNegErr: apierrors.NewNotFound(schema.GroupResource{}, ""),
+			negStatus: &NEGStatus{
+				NEGs: map[string]string{"80": fakeNeg},
+			},
+			wantZones: []string{},
+			wantErr:   false,
+		},
+		{
+			name:         "get svcneg error",
+			getSvcNegErr: apierrors.NewForbidden(schema.GroupResource{}, "", nil),
+			negStatus: &NEGStatus{
+				NEGs: map[string]string{"80": fakeNeg},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &fakeReader{
+				svcNeg: tt.svcNeg,
+				getErr: tt.getSvcNegErr,
+			}
+			zones, err := zonesFromSvcNeg(context.Background(), r, "test", tt.negStatus)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ZonesFromSvcNeg() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !reflect.DeepEqual(zones, tt.wantZones) {
+				t.Errorf("ZonesFromSvcNeg() zones = %v, want %v", zones, tt.wantZones)
+			}
+		})
 	}
 }
