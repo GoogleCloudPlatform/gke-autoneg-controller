@@ -382,3 +382,39 @@ resource "kubernetes_deployment" "deployment_autoneg_controller_manager" {
     kubernetes_cluster_role_binding.clusterrolebinding_autoneg_proxy_rolebinding,
   ]
 }
+
+resource "kubernetes_pod_disruption_budget" "pdb_autoneg_controller" {
+  count = var.pod_disruption_budget.enabled ? 1 : 0
+
+  metadata {
+    name      = "autoneg-controller-manager-pdb"
+    namespace = kubernetes_namespace.namespace_autoneg_system.metadata[0].name
+    labels = {
+      app           = "autoneg"
+      control-plane = "controller-manager"
+    }
+  }
+
+  spec {
+    dynamic "min_available" {
+      for_each = var.pod_disruption_budget.min_available != null ? [var.pod_disruption_budget.min_available] : []
+      content {
+        value = min_available.value
+      }
+    }
+
+    dynamic "max_unavailable" {
+      for_each = var.pod_disruption_budget.max_unavailable != null ? [var.pod_disruption_budget.max_unavailable] : []
+      content {
+        value = max_unavailable.value
+      }
+    }
+
+    selector {
+      match_labels = {
+        app           = "autoneg"
+        control-plane = "controller-manager"
+      }
+    }
+  }
+}
