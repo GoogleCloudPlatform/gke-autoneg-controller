@@ -21,6 +21,14 @@ autoscaling: {}
 
 replicas: 1
 
+# Pod Disruption Budget configuration
+podDisruptionBudget:
+  # Enable or disable PDB creation
+  enabled: true
+  # Specify either minAvailable or maxUnavailable, not both
+  minAvailable: 1
+  # maxUnavailable: 1
+
 serviceAccount:
   create: true
   name: autoneg-controller-manager

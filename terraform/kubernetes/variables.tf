@@ -70,3 +70,17 @@ variable "priority_class_name" {
   type        = string
   default     = null
 }
+
+variable "pod_disruption_budget" {
+  description = "Pod Disruption Budget configuration"
+  type = object({
+    enabled       = bool
+    min_available = optional(number)
+    max_unavailable = optional(number)
+  })
+  default = {
+    enabled       = true
+    min_available = 1
+    max_unavailable = null
+  }
+}
