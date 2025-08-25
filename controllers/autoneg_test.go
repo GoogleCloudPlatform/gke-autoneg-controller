@@ -720,6 +720,10 @@ var (
 		AutonegConfig: configBasic,
 		NEGStatus:     negStatus,
 	}
+	statusBasicWithEmptyNEGs = AutonegStatus{
+		AutonegConfig: configBasic,
+		NEGStatus:     NEGStatus{},
+	}
 	backendsBasicWithNEGs = map[string]map[string]Backends{"80": map[string]Backends{"test": Backends{name: "test", backends: []compute.Backend{
 		statusBasicWithNEGs.Backend("test", "80", getGroup(fakeProject, "zone1", fakeNeg)),
 		statusBasicWithNEGs.Backend("test", "80", getGroup(fakeProject, "zone2", fakeNeg)),
@@ -991,6 +995,7 @@ func Test_checkOperation(t *testing.T) {
 
 func TestReconcileBackendsDeletionWithMissingBackend(t *testing.T) {
 	s := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		t.Logf("Got request: %s", req.URL.String())
 		// Return not found on backend service get.
 		res.WriteHeader(http.StatusNotFound)
 	}))
@@ -1002,10 +1007,47 @@ func TestReconcileBackendsDeletionWithMissingBackend(t *testing.T) {
 		project: "test-project",
 		s:       cs,
 	}
-	err = bc.ReconcileBackends(statusBasicWithNEGs, AutonegStatus{
+	err = bc.ReconcileBackends(context.Background(), statusBasicWithNEGs, AutonegStatus{
 		// On deletion, the intended state is set to empty.
 		AutonegConfig: AutonegConfig{},
 		NEGStatus:     negStatus,
+	})
+	if err != nil {
+		t.Errorf("ReconcileBackends() got err: %v, want none", err)
+	}
+}
+
+func TestReconcileBackendsDeletionWithEmptyNEGStatus(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		t.Logf("Got request: %s", req.URL.String())
+		// Return not found on backend service get.
+		res.WriteHeader(http.StatusNotFound)
+	}))
+	cs, err := compute.NewService(context.Background(), option.WithEndpoint(s.URL), option.WithoutAuthentication())
+	if err != nil {
+		t.Fatalf("Failed to instantiate compute service: %v", err)
+	}
+	bc := ProdBackendController{
+		project: "test-project",
+		s:       cs,
+	}
+	err = bc.ReconcileBackends(context.Background(), AutonegStatus{
+		AutonegConfig: AutonegConfig{
+			BackendServices: map[string]map[string]AutonegNEGConfig{
+				"80": {
+					"test": AutonegNEGConfig{
+						Name: "test",
+						Rate: 100,
+					},
+				},
+			},
+		},
+		NEGStatus: NEGStatus{}, // NEG status not populated by GKE NEG controller.
+	}, AutonegStatus{
+		AutonegConfig: AutonegConfig{
+			BackendServices: map[string]map[string]AutonegNEGConfig{},
+		},
+		NEGStatus: NEGStatus{},
 	})
 	if err != nil {
 		t.Errorf("ReconcileBackends() got err: %v, want none", err)
