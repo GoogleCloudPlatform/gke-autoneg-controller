@@ -201,15 +201,21 @@ func checkOperation(op *compute.Operation) error {
 
 // ReconcileBackends takes the actual and intended AutonegStatus
 // and attempts to apply the intended status or return an error
-func (b *ProdBackendController) ReconcileBackends(actual, intended AutonegStatus) (err error) {
+func (b *ProdBackendController) ReconcileBackends(ctx context.Context, actual, intended AutonegStatus) (err error) {
+	logger := log.FromContext(ctx)
+	// Determine which backends to remove and which to insert/update.
 	removes, upserts := ReconcileStatus(b.project, actual, intended)
+	logger.Info("Reconciling backends", "removes", removes, "upserts", upserts)
 
 	var forceCapacity map[int]bool = make(map[int]bool, 0)
+	// Iterate over each port that has backends to be removed.
 	for port, _removes := range removes {
+		// Iterate over each backend service to be removed.
 		for idx, remove := range _removes {
 			var oldSvc *compute.BackendService
-			oldSvc, err = b.getBackendService(remove.name, remove.region)
 			var svcUpdated = false
+			// Get the current state of the backend service.
+			oldSvc, err = b.getBackendService(remove.name, remove.region)
 			var e *errNotFound
 			if errors.As(err, &e) {
 				// If the backend service is gone, we construct a BackendService with the same name
@@ -226,7 +232,8 @@ func (b *ProdBackendController) ReconcileBackends(actual, intended AutonegStatus
 			var newSvc *compute.BackendService
 			upsert := upserts[port][idx]
 
-			if upsert.name != remove.name {
+			// Check if the same port is in the upsert map and if upsert needs to happen on a different backend service.
+			if upsert.name != "" && upsert.name != remove.name {
 				if newSvc, err = b.getBackendService(upsert.name, upsert.region); err != nil {
 					return
 				}
@@ -234,8 +241,9 @@ func (b *ProdBackendController) ReconcileBackends(actual, intended AutonegStatus
 				newSvc = oldSvc
 			}
 
-			// Remove backends in the list to be deleted
+			// Remove backends that are in the list to be deleted for this port.
 			for _, d := range remove.backends {
+				// Remove only the requested backends and keep the rest.
 				for i, be := range oldSvc.Backends {
 					if d.Group == be.Group {
 						svcUpdated = true
@@ -246,8 +254,9 @@ func (b *ProdBackendController) ReconcileBackends(actual, intended AutonegStatus
 				}
 			}
 
-			// If we are changing backend services, save the old service
-			if upsert.name != remove.name && svcUpdated {
+			// If a different service needs to be updated based on the upsert map entry for this port,
+			// then save the existing backend service and update the new service.
+			if svcUpdated && (upsert.name == "" || upsert.name != remove.name) {
 				if err = b.updateBackends(remove.name, remove.region, oldSvc, forceCapacity); err != nil {
 					return
 				}
@@ -263,7 +272,7 @@ func (b *ProdBackendController) ReconcileBackends(actual, intended AutonegStatus
 						be.MaxConnectionsPerEndpoint = u.MaxConnectionsPerEndpoint
 						if intended.AutonegSyncConfig != nil {
 							var syncConfig AutonegSyncConfig = *intended.AutonegSyncConfig
-							if syncConfig.CapacityScaler != nil && *syncConfig.CapacityScaler == true {
+							if syncConfig.CapacityScaler != nil && *syncConfig.CapacityScaler {
 								be.CapacityScaler = u.CapacityScaler
 							}
 						} else {
@@ -477,6 +486,7 @@ func getStatuses(ctx context.Context, namespace string, name string, annotations
 	if ok {
 		// Found a status, decode
 		if err = json.Unmarshal([]byte(tmp), &s.negConfig); err != nil {
+			err = fmt.Errorf("failed to decode neg annotation %s: %w", negAnnotation, err)
 			return
 		}
 	}
@@ -489,12 +499,14 @@ func getStatuses(ctx context.Context, namespace string, name string, annotations
 
 		var tempConfig AutonegConfigTemp
 		if err = json.Unmarshal([]byte(tmp), &tempConfig); err != nil {
+			err = fmt.Errorf("failed to decode autoneg annotation %s: %w", autonegAnnotation, err)
 			return
 		}
 
 		tmpSync, syncOk := annotations[autonegSyncAnnotation]
 		if syncOk {
 			if err = json.Unmarshal([]byte(tmpSync), &s.syncConfig); err != nil {
+				err = fmt.Errorf("failed to decode autoneg-sync annotation %s: %w", autonegSyncAnnotation, err)
 				return
 			}
 		}
@@ -540,6 +552,7 @@ func getStatuses(ctx context.Context, namespace string, name string, annotations
 		}
 		// Found a status, decode
 		if err = json.Unmarshal([]byte(tmp), &s.status); err != nil {
+			err = fmt.Errorf("failed to decode autoneg-status annotation %s: %w", autonegStatusAnnotation, err)
 			return
 		}
 	}
@@ -551,6 +564,7 @@ func getStatuses(ctx context.Context, namespace string, name string, annotations
 			valid = true
 
 			if err = json.Unmarshal([]byte(tmp), &s.oldConfig); err != nil {
+				err = fmt.Errorf("failed to decode %s annotation %s: %w", oldAutonegAnnotation, tmp, err)
 				return
 			}
 
@@ -579,7 +593,7 @@ func getStatuses(ctx context.Context, namespace string, name string, annotations
 					Connections: 0,
 				}
 			} else {
-				err = errors.New(fmt.Sprintf("more than one port in %s, but autoneg configuration is for one or no ports", negAnnotation))
+				err = fmt.Errorf("more than one port in %s, but autoneg configuration is for one or no ports", negAnnotation)
 				return
 			}
 		}
@@ -593,6 +607,7 @@ func getStatuses(ctx context.Context, namespace string, name string, annotations
 			}
 			// Found a status, decode
 			if err = json.Unmarshal([]byte(tmp), &s.oldStatus); err != nil {
+				err = fmt.Errorf("failed to decode %s annotation %s: %w", oldAutonegStatusAnnotation, tmp, err)
 				return
 			}
 		}

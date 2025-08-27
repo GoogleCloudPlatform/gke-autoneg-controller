@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"time"
 
@@ -35,7 +36,7 @@ import (
 )
 
 type BackendController interface {
-	ReconcileBackends(AutonegStatus, AutonegStatus) error
+	ReconcileBackends(context.Context, AutonegStatus, AutonegStatus) error
 }
 
 // ServiceReconciler reconciles a Service object
@@ -104,7 +105,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		AutonegConfig: status.config,
 		NEGStatus:     status.negStatus,
 	}
-	logger.Info("Existing status", "status", status)
+	logger.Info("Existing status", "status", fmt.Sprintf("%+v", status))
 	if status.syncConfig != nil {
 		intendedStatus.AutonegSyncConfig = status.syncConfig
 	}
@@ -124,7 +125,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Reconcile differences
 	logger.Info("Applying intended status", "status", intendedStatus)
 
-	if err = r.ReconcileBackends(status.status, intendedStatus); err != nil {
+	if err = r.ReconcileBackends(ctx, status.status, intendedStatus); err != nil {
 		var e *errNotFound
 		if !(deleting && errors.As(err, &e)) {
 			r.Recorder.Event(svc, "Warning", "BackendError", err.Error())
