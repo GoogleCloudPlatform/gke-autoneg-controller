@@ -396,19 +396,9 @@ resource "kubernetes_pod_disruption_budget" "pdb_autoneg_controller" {
   }
 
   spec {
-    dynamic "min_available" {
-      for_each = var.pod_disruption_budget.min_available != null ? [var.pod_disruption_budget.min_available] : []
-      content {
-        value = min_available.value
-      }
-    }
-
-    dynamic "max_unavailable" {
-      for_each = var.pod_disruption_budget.max_unavailable != null ? [var.pod_disruption_budget.max_unavailable] : []
-      content {
-        value = max_unavailable.value
-      }
-    }
+    # Validation in variables.tf ensures only one of these is set when enabled.
+    min_available   = var.pod_disruption_budget.min_available
+    max_unavailable = var.pod_disruption_budget.max_unavailable
 
     selector {
       match_labels = {

@@ -72,15 +72,32 @@ variable "priority_class_name" {
 }
 
 variable "pod_disruption_budget" {
-  description = "Pod Disruption Budget configuration"
+  description = "Pod Disruption Budget configuration: exactly one of min_available or max_unavailable must be set (as integer or percentage) when enabled."
   type = object({
-    enabled       = bool
-    min_available = optional(number)
-    max_unavailable = optional(number)
+    enabled = bool
+    # Use string to allow either absolute numbers (e.g. "1") or percentages (e.g. "50%")
+    min_available   = optional(string)
+    max_unavailable = optional(string)
   })
   default = {
-    enabled       = true
-    min_available = 1
+    enabled         = true
+    min_available   = 1
     max_unavailable = null
+  }
+
+  # Validation: if enabled, exactly one of min_available or max_unavailable must be provided.
+  validation {
+    condition = (
+      !var.pod_disruption_budget.enabled || (
+        (
+          var.pod_disruption_budget.min_available != null &&
+          var.pod_disruption_budget.max_unavailable == null
+          ) || (
+          var.pod_disruption_budget.min_available == null &&
+          var.pod_disruption_budget.max_unavailable != null
+        )
+      )
+    )
+    error_message = "When pod_disruption_budget.enabled is true, set exactly one of min_available or max_unavailable."
   }
 }
