@@ -30,7 +30,7 @@ resource "google_service_account" "autoneg" {
 }
 
 resource "google_compute_subnetwork_iam_member" "shared_vpc_user" {
-  count      = var.shared_vpc != null ? 1 : 0
+  count      = var.shared_vpc != null && var.workload_identity != null ? 1 : 0
   project    = var.shared_vpc.project_id
   region     = var.shared_vpc.subnetwork_region
   subnetwork = var.shared_vpc.subnetwork_id

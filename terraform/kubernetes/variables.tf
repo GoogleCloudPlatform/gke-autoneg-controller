@@ -36,11 +36,6 @@ variable "kube_rbac_proxy_image" {
   default     = "gcr.io/kubebuilder/kube-rbac-proxy:v0.16.0"
 }
 
-variable "service_account_email" {
-  type        = string
-  description = "Autoneg service account email"
-}
-
 variable "namespace" {
   type        = string
   description = "Autoneg namespace"
@@ -63,6 +58,13 @@ variable "workload_identity" {
     namespace       = "autoneg-system"
     service_account = "autoneg"
   }
+  validation {
+    condition = var.workload_identity != null ? (
+      var.workload_identity.namespace != null &&
+      var.workload_identity.service_account != null
+    ) : true
+    error_message = "When workload_identity is set, both namespace and service_account must be specified."
+  }
 }
 
 variable "priority_class_name" {
@@ -71,16 +73,30 @@ variable "priority_class_name" {
   default     = null
 }
 
+variable "replicas" {
+  description = "Number of replicas for the deployment"
+  type        = number
+  default     = 1
+}
+
 variable "pod_disruption_budget" {
   description = "Pod Disruption Budget configuration"
   type = object({
-    enabled       = bool
-    min_available = optional(number)
+    enabled         = bool
+    min_available   = optional(number)
     max_unavailable = optional(number)
   })
   default = {
-    enabled       = true
-    min_available = 1
+    enabled         = false
+    min_available   = null
     max_unavailable = null
+  }
+  validation {
+    condition     = var.pod_disruption_budget.enabled ? (var.pod_disruption_budget.min_available != null || var.pod_disruption_budget.max_unavailable != null) : true
+    error_message = "When pod_disruption_budget is enabled, at least one of min_available or max_unavailable must be set"
+  }
+  validation {
+    condition     = var.pod_disruption_budget.enabled ? (var.pod_disruption_budget.min_available != null && var.pod_disruption_budget.max_unavailable != null) : true
+    error_message = "When pod_disruption_budget is enabled, only one of min_available or max_unavailable can be set"
   }
 }

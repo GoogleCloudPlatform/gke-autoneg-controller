@@ -43,7 +43,7 @@ resource "kubernetes_service_account" "service_account" {
     }
 
     annotations = var.workload_identity != null ? {
-      "iam.gke.io/gcp-service-account" = var.service_account_email
+      "iam.gke.io/gcp-service-account" = format("%s@%s.iam.gserviceaccount.com", var.workload_identity.service_account, var.project_id)
     } : {}
   }
 }
@@ -260,7 +260,7 @@ resource "kubernetes_deployment" "deployment_autoneg_controller_manager" {
   }
 
   spec {
-    replicas = 1
+    replicas = var.replicas
     selector {
       match_labels = {
         app           = "autoneg"
@@ -396,19 +396,8 @@ resource "kubernetes_pod_disruption_budget" "pdb_autoneg_controller" {
   }
 
   spec {
-    dynamic "min_available" {
-      for_each = var.pod_disruption_budget.min_available != null ? [var.pod_disruption_budget.min_available] : []
-      content {
-        value = min_available.value
-      }
-    }
-
-    dynamic "max_unavailable" {
-      for_each = var.pod_disruption_budget.max_unavailable != null ? [var.pod_disruption_budget.max_unavailable] : []
-      content {
-        value = max_unavailable.value
-      }
-    }
+    min_available   = var.pod_disruption_budget.min_available
+    max_unavailable = var.pod_disruption_budget.max_unavailable
 
     selector {
       match_labels = {

@@ -28,12 +28,12 @@ terraform {
 module "gcp" {
   source = "../gcp"
 
-  project_id = var.project_id
-
+  project_id                    = var.project_id
+  service_account_id            = var.service_account_id
+  shared_vpc                    = var.shared_vpc
+  workload_identity             = var.workload_identity
+  regional                      = var.regional
   custom_role_add_random_suffix = var.custom_role_add_random_suffix
-
-  workload_identity  = var.workload_identity
-  service_account_id = var.service_account_id
 }
 
 module "kubernetes" {
@@ -43,7 +43,10 @@ module "kubernetes" {
   controller_image      = var.controller_image
   image_pull_policy     = var.image_pull_policy
   kube_rbac_proxy_image = var.kube_rbac_proxy_image
-  priority_class_name   = var.priority_class_name
-  service_account_email = module.gcp.service_account_email
+  namespace             = var.namespace
+  service_account_id    = var.service_account_id
   workload_identity     = var.workload_identity
+  priority_class_name   = var.priority_class_name
+  replicas              = var.replicas
+  pod_disruption_budget = var.pod_disruption_budget
 }
