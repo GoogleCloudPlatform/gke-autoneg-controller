@@ -253,7 +253,7 @@ spec:
         - --zap-encoder=json
         command:
         - /manager
-        image: ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:v1.1.0
+        image: ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:v1.4.3
         livenessProbe:
           httpGet:
             path: /healthz
