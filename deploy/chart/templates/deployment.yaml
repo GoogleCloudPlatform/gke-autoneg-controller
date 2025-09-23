@@ -72,7 +72,7 @@ spec:
       containers:
         {{- if .Values.kube_rbac_proxy }}
         - name: {{ .Values.kube_rbac_proxy.name }}
-          image: {{ .Values.kube_rbac_proxy.image | quote }}
+          image: "{{ include "kube_rbac_proxy.image" . }}"
           securityContext:
             {{- toYaml .Values.kube_rbac_proxy.securityContext | nindent 12 }}
           args:
@@ -82,7 +82,7 @@ spec:
               containerPort: {{ .Values.kube_rbac_proxy.port | default 8443 }}
         {{- end }}
         - name: {{ .Values.gke_autoneg_controller.name }}
-          image: {{ .Values.gke_autoneg_controller.image | quote }}
+          image: "{{ include "autoneg.image" . }}"
           securityContext:
             {{- toYaml .Values.gke_autoneg_controller.securityContext | nindent 12 }}
           args:

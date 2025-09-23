@@ -1,17 +1,9 @@
 {{/*
-Expand the name of the chart.
+Create chart name and version as used by the chart label.
 */}}
-{{- define "autoneg.name" -}}
-{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
+{{- define "autoneg.chart" -}}
+{{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
-
-{{/*
-Allow the release namespace to be overridden for multi-namespace deployments in combined charts.
-*/}}
-{{- define "autoneg.namespace" -}}
-{{- default .Release.Namespace .Values.namespaceOverride | trunc 63 | trimSuffix "-" -}}
-{{- end -}}
-
 
 {{/*
 Create a default fully qualified app name.
@@ -32,11 +24,33 @@ If release name contains chart name it will be used as a full name.
 {{- end }}
 
 {{/*
-Create chart name and version as used by the chart label.
+Return the full image reference. Prefer digest if provided.
+- If .Values.gke_autoneg_controller.image.digest is set: repo@digest
+- Else if .Values.gke_autoneg_controller.image.tag is set: repo:tag
+- Else: repo:v.Chart.AppVersion
+Also: prevent using both tag and digest.
 */}}
-{{- define "autoneg.chart" -}}
-{{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
-{{- end }}
+{{- define "autoneg.image" -}}
+{{- $repo := required "gke_autoneg_controller.image.repository is required" .Values.gke_autoneg_controller.image.repository -}}
+{{- $tag := .Values.gke_autoneg_controller.image.tag | toString | trim -}}
+{{- $digest := .Values.gke_autoneg_controller.image.digest | toString | trim -}}
+
+{{- if and $tag $digest -}}
+  {{- fail "Specify either gke_autoneg_controller.image.tag or gke_autoneg_controller.image.digest, not both." -}}
+{{- end -}}
+
+{{- if $digest -}}
+  {{- if not (regexMatch `^sha256:[A-Fa-f0-9]{64}$` $digest) -}}
+    {{- fail (printf "gke_autoneg_controller.image.digest must match ^sha256:[0-9a-f]{64}$, got %q" $digest) -}}
+  {{- end -}}
+
+  {{- $repo -}}@{{ $digest }}
+{{- else if $tag -}}
+  {{- $repo -}}:{{ $digest }}
+{{- else -}}
+  {{- $repo -}}:v{{ .Chart.AppVersion }}
+{{- end -}}
+{{- end -}}
 
 {{/*
 Common labels
@@ -52,6 +66,20 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{ toYaml . }}
 {{- end }}
 {{- end }}
+
+{{/*
+Expand the name of the chart.
+*/}}
+{{- define "autoneg.name" -}}
+{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Allow the release namespace to be overridden for multi-namespace deployments in combined charts.
+*/}}
+{{- define "autoneg.namespace" -}}
+{{- default .Release.Namespace .Values.namespaceOverride | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
 
 {{/*
 Selector labels
@@ -71,3 +99,27 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Build the kube-rbac-proxy image reference:
+- Prefer digest: repo@sha256:...
+- Else use tag:  repo:tag
+*/}}
+{{- define "kube_rbac_proxy.image" -}}
+{{- $img := .Values.kube_rbac_proxy.image -}}
+{{- $repo := required "kube_rbac_proxy.image.repository is required" $img.repository -}}
+{{- $tag := default "" ($img.tag | toString | trim) -}}
+{{- $digest := default "" ($img.digest | toString | trim) -}}
+
+{{- if $digest -}}
+  {{- if not (regexMatch `^sha256:[A-Fa-f0-9]{64}$` $digest) -}}
+    {{- fail (printf "kube_rbac_proxy.image.digest must match ^sha256:[0-9a-f]{64}$, got %q" $digest) -}}
+  {{- end -}}
+  {{- $repo -}}@{{ $digest }}
+{{- else -}}
+  {{- if eq $tag "" -}}
+    {{- fail "kube_rbac_proxy.image.tag is empty and no digest was provided" -}}
+  {{- end -}}
+  {{- $repo -}}:{{ $digest }}
+{{- end -}}
+{{- end -}}

@@ -51,7 +51,13 @@ service:
 # https://github.com/kubernetes-sigs/kubebuilder/issues/3524#issuecomment-1687893746
 kube_rbac_proxy:
   name: kube-rbac-proxy
-  image: gcr.io/kubebuilder/kube-rbac-proxy:v0.16.0
+  image:
+    # kube_rbac_proxy.image.digest -- Kube RBAC Proxy image digest to use, takes precedence over tag if specified
+    digest: ""
+    # kube_rbac_proxy.image.repository -- Kube RBAC Proxy image repository to use
+    repository: gcr.io/kubebuilder/kube-rbac-proxy
+    # kube_rbac_proxy.image.tag -- Kube RBAC Proxy image tag to use
+    tag: "v0.16.0"
   securityContext:
     allowPrivilegeEscalation: false
     privileged: false
@@ -73,7 +79,13 @@ kube_rbac_proxy:
 
 gke_autoneg_controller:
   name: manager
-  image: ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:latest
+  image:
+    # gke_autoneg_controller.image.digest -- Controller image digest to use, takes precedence over tag if specified
+    digest: ""
+    # gke_autoneg_controller.image.repository -- Controller image repository to use
+    repository: ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller
+    # gke_autoneg_controller.image.tag -- Controller image tag to use, defaults to v{{.Chart.AppVersion}}
+    tag: ""
   command:
     - /manager
   args:
