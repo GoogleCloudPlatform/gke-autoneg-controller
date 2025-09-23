@@ -36,7 +36,7 @@ import (
 )
 
 type BackendController interface {
-	ReconcileBackends(context.Context, AutonegStatus, AutonegStatus) error
+	ReconcileBackends(context.Context, AutonegStatus, AutonegStatus, bool) error
 }
 
 // ServiceReconciler reconciles a Service object
@@ -79,7 +79,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			// Object not found, return.
 			return r.reconcileResult(nil)
 		}
-		// Error reading the object - requeue the request.
+		// Error reading thkube object - requeue the request.
 		return r.reconcileResult(err)
 	}
 
@@ -88,7 +88,6 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if !ok {
 		return r.reconcileResult(nil)
 	}
-
 	if err != nil {
 		r.Recorder.Event(svc, "Warning", "ConfigError", err.Error())
 		return r.reconcileResult(err)
@@ -125,7 +124,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Reconcile differences
 	logger.Info("Applying intended status", "status", intendedStatus)
 
-	if err = r.ReconcileBackends(ctx, status.status, intendedStatus); err != nil {
+	if err = r.ReconcileBackends(ctx, status.status, intendedStatus, deleting); err != nil {
 		var e *errNotFound
 		if !(deleting && errors.As(err, &e)) {
 			r.Recorder.Event(svc, "Warning", "BackendError", err.Error())
