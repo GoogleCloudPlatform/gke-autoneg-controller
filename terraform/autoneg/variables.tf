@@ -19,10 +19,50 @@ variable "project_id" {
   description = "GCP project ID"
 }
 
+variable "service_account_id" {
+  type        = string
+  description = "Autoneg service account"
+  default     = "autoneg"
+}
+
+variable "shared_vpc" {
+  type = object({
+    project_id        = string
+    subnetwork_region = string
+    subnetwork_id     = string
+  })
+  description = "Shared VPC configuration which the autoneg service account can use"
+  default     = null
+}
+
+variable "workload_identity" {
+  type = object({
+    namespace       = string
+    service_account = string
+  })
+  description = "Workload identity configuration"
+  default = {
+    namespace       = "autoneg-system"
+    service_account = "autoneg"
+  }
+}
+
+variable "regional" {
+  type        = bool
+  description = "Whether or not to add regionBackend and regionHealthCheck permissions."
+  default     = true
+}
+
+variable "custom_role_add_random_suffix" {
+  type        = bool
+  description = "Sets random suffix at the end of the IAM custom role id"
+  default     = false
+}
+
 variable "controller_image" {
   type        = string
   description = "Autoneg controller container image"
-  default     = "ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:v1.0.0"
+  default     = "ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:v1.4.2"
 }
 
 variable "image_pull_policy" {
@@ -37,32 +77,32 @@ variable "kube_rbac_proxy_image" {
   default     = "gcr.io/kubebuilder/kube-rbac-proxy:v0.16.0"
 }
 
-variable "workload_identity" {
-  description = "Workload identity configuration"
-  type = object({
-    namespace       = string
-    service_account = string
-  })
-  default = {
-    namespace       = "autoneg-system"
-    service_account = "autoneg"
-  }
-}
-
-variable "custom_role_add_random_suffix" {
-  type        = bool
-  description = "Sets random suffix at the end of the IAM custom role id"
-  default     = false
-}
-
-variable "service_account_id" {
-  description = "Service account id to be created"
-  default     = "autoneg"
+variable "namespace" {
   type        = string
+  description = "Autoneg namespace"
+  default     = "autoneg-system"
 }
 
 variable "priority_class_name" {
-  description = "Pod's PriorityClass name"
   type        = string
+  description = "Pod's PriorityClass name"
   default     = null
+}
+
+variable "replicas" {
+  type        = number
+  description = "Number of replicas for the deployment"
+  default     = 1
+}
+
+variable "pod_disruption_budget" {
+  type = object({
+    enabled         = bool
+    min_available   = optional(number)
+    max_unavailable = optional(number)
+  })
+  description = "Pod Disruption Budget configuration"
+  default = {
+    enabled = false
+  }
 }

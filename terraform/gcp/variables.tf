@@ -20,37 +20,44 @@ variable "project_id" {
 }
 
 variable "service_account_id" {
+  type        = string
   description = "Service account id to be created"
   default     = "autoneg"
-  type        = string
 }
 
 variable "shared_vpc" {
-  description = "Shared VPC configuration which the autoneg service account can use"
-  default     = null
   type = object({
     project_id        = string
     subnetwork_region = string
     subnetwork_id     = string
   })
+  description = "Shared VPC configuration which the autoneg service account can use"
+  default     = null
 }
 
 variable "workload_identity" {
-  description = "Workload identity configuration"
   type = object({
     namespace       = string
     service_account = string
   })
+  description = "Workload identity configuration"
   default = {
     namespace       = "autoneg-system"
     service_account = "autoneg"
   }
+  validation {
+    condition = var.workload_identity != null ? (
+      var.workload_identity.namespace != null &&
+      var.workload_identity.service_account != null
+    ) : true
+    error_message = "When workload_identity is set, both namespace and service_account must be specified."
+  }
 }
 
 variable "regional" {
+  type        = bool
   description = "Whether or not to add regionBackend and regionHealthCheck permissions."
   default     = true
-  type        = bool
 }
 
 variable "custom_role_add_random_suffix" {
