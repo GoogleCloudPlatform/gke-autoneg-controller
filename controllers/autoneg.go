@@ -210,7 +210,7 @@ func (b *ProdBackendController) ReconcileBackends(ctx context.Context, actual, i
 	logger := log.FromContext(ctx)
 	// Determine which backends to remove and which to insert/update.
 	removes, upserts := ReconcileStatus(logger, b.project, actual, intended)
-	// logger.Info("Reconciling backends", "removes", fmt.Sprintf("%+v", removes), "upserts", fmt.Sprintf("%+v", upserts))
+	logger.Info("Reconciling backends", "removes", fmt.Sprintf("%+v", removes), "upserts", fmt.Sprintf("%+v", upserts))
 
 	var forceCapacity map[int]bool = make(map[int]bool, 0)
 	// Iterate over each port that has backends to be removed.
