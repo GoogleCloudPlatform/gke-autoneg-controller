@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/ingress-gce/pkg/apis/svcneg/v1beta1"
 	"k8s.io/utils/pointer"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var (
@@ -912,8 +913,9 @@ var reconcileTests = []struct {
 }
 
 func TestReconcileStatuses(t *testing.T) {
+	logger := log.FromContext(context.TODO())
 	for _, rt := range reconcileTests {
-		removes, upserts := ReconcileStatus(fakeProject, rt.actual, rt.intended)
+		removes, upserts := ReconcileStatus(logger, fakeProject, rt.actual, rt.intended)
 		for port := range rt.removes {
 			if _, ok := removes[port]; !ok {
 				t.Errorf("Set %q: Removed port %s backends: expected:\n%+v\n got missing key %+v", rt.name, port, rt.removes[port], port)
@@ -1011,7 +1013,7 @@ func TestReconcileBackendsDeletionWithMissingBackend(t *testing.T) {
 		// On deletion, the intended state is set to empty.
 		AutonegConfig: AutonegConfig{},
 		NEGStatus:     negStatus,
-	})
+	}, false)
 	if err != nil {
 		t.Errorf("ReconcileBackends() got err: %v, want none", err)
 	}
@@ -1048,7 +1050,7 @@ func TestReconcileBackendsDeletionWithEmptyNEGStatus(t *testing.T) {
 			BackendServices: map[string]map[string]AutonegNEGConfig{},
 		},
 		NEGStatus: NEGStatus{},
-	})
+	}, false)
 	if err != nil {
 		t.Errorf("ReconcileBackends() got err: %v, want none", err)
 	}

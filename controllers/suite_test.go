@@ -105,7 +105,7 @@ type TestBackendController struct {
 	Counter int
 }
 
-func (t *TestBackendController) ReconcileBackends(context.Context, AutonegStatus, AutonegStatus) error {
+func (t *TestBackendController) ReconcileBackends(context.Context, AutonegStatus, AutonegStatus, bool) error {
 	t.Counter++
 	fmt.Print(t.Counter)
 	return nil

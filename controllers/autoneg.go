@@ -27,6 +27,7 @@ import (
 	"time"
 
 	backoff "github.com/cenkalti/backoff/v5"
+	"github.com/go-logr/logr"
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/googleapi"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -135,9 +136,13 @@ func (b *ProdBackendController) getBackendService(name string, region string) (s
 
 }
 
-func (b *ProdBackendController) updateBackends(name string, region string, svc *compute.BackendService, forceCapacity map[int]bool) error {
+func (b *ProdBackendController) updateBackends(name string, region string, svc *compute.BackendService, forceCapacity map[int]bool, deleting bool) error {
 	if len(svc.Backends) == 0 {
-		svc.NullFields = []string{"Backends"}
+		if deleting {
+			svc.ForceSendFields = []string{"Backends"}
+		} else {
+			svc.NullFields = []string{"Backends"}
+		}
 	} else {
 		for beidx, be := range svc.Backends {
 			if fc, ok := forceCapacity[beidx]; ok && fc {
@@ -201,11 +206,11 @@ func checkOperation(op *compute.Operation) error {
 
 // ReconcileBackends takes the actual and intended AutonegStatus
 // and attempts to apply the intended status or return an error
-func (b *ProdBackendController) ReconcileBackends(ctx context.Context, actual, intended AutonegStatus) (err error) {
+func (b *ProdBackendController) ReconcileBackends(ctx context.Context, actual, intended AutonegStatus, deleting bool) (err error) {
 	logger := log.FromContext(ctx)
 	// Determine which backends to remove and which to insert/update.
-	removes, upserts := ReconcileStatus(b.project, actual, intended)
-	logger.Info("Reconciling backends", "removes", removes, "upserts", upserts)
+	removes, upserts := ReconcileStatus(logger, b.project, actual, intended)
+	// logger.Info("Reconciling backends", "removes", fmt.Sprintf("%+v", removes), "upserts", fmt.Sprintf("%+v", upserts))
 
 	var forceCapacity map[int]bool = make(map[int]bool, 0)
 	// Iterate over each port that has backends to be removed.
@@ -256,8 +261,8 @@ func (b *ProdBackendController) ReconcileBackends(ctx context.Context, actual, i
 
 			// If a different service needs to be updated based on the upsert map entry for this port,
 			// then save the existing backend service and update the new service.
-			if svcUpdated && (upsert.name == "" || upsert.name != remove.name) {
-				if err = b.updateBackends(remove.name, remove.region, oldSvc, forceCapacity); err != nil {
+			if svcUpdated && (deleting || upsert.name == "" || upsert.name != remove.name) {
+				if err = b.updateBackends(remove.name, remove.region, oldSvc, forceCapacity, deleting); err != nil {
 					return
 				}
 			}
@@ -300,7 +305,7 @@ func (b *ProdBackendController) ReconcileBackends(ctx context.Context, actual, i
 				}
 			}
 			if len(upsert.backends) > 0 {
-				err = b.updateBackends(upsert.name, upsert.region, newSvc, forceCapacity)
+				err = b.updateBackends(upsert.name, upsert.region, newSvc, forceCapacity, deleting)
 			}
 			if err != nil {
 				return err
@@ -320,9 +325,11 @@ func sortBackends(backends *[]compute.Backend) {
 
 // ReconcileStatus takes the actual and intended AutonegStatus
 // and returns sets of backends to remove, and to upsert
-func ReconcileStatus(project string, actual AutonegStatus, intended AutonegStatus) (removes, upserts map[string]map[string]Backends) {
+func ReconcileStatus(logger logr.Logger, project string, actual AutonegStatus, intended AutonegStatus) (removes, upserts map[string]map[string]Backends) {
 	upserts = make(map[string]map[string]Backends, 0)
 	removes = make(map[string]map[string]Backends, 0)
+
+	// logger.Info("Reconciling statuses", "actual", fmt.Sprintf("%+v", actual), "intended", fmt.Sprintf("%+v", intended))
 
 	// transform into maps with backend group as key
 	actualBE := map[string]map[string]struct{}{}
@@ -344,7 +351,6 @@ func ReconcileStatus(project string, actual AutonegStatus, intended AutonegStatu
 	}
 
 	// actualBE and intendedBE is a list of NEGs per port now
-
 	var intendedBEKeys []string
 	for k := range intendedBE {
 		intendedBEKeys = append(intendedBEKeys, k)
@@ -493,7 +499,7 @@ func getStatuses(ctx context.Context, namespace string, name string, annotations
 
 	// Is this service using autoneg in new mode?
 	oldOk := false
-	tmp, newOk := annotations[autonegAnnotation]
+	tmp, newOk := annotations[autonegAnnotation] // controller.autoneg.dev/neg
 	if newOk {
 		valid = true
 
