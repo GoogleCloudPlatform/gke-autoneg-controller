@@ -120,6 +120,6 @@ Build the kube-rbac-proxy image reference:
   {{- if eq $tag "" -}}
     {{- fail "kube_rbac_proxy.image.tag is empty and no digest was provided" -}}
   {{- end -}}
-  {{- $repo -}}:{{ $digest }}
+  {{- $repo -}}:{{ $tag }}
 {{- end -}}
 {{- end -}}
