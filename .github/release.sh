@@ -29,5 +29,8 @@ $SED -i -e "s/version: .*$/version: $NEWCHARTVERSION/" deploy/chart/Chart.yaml
 
 $SED -i -e "s/appVersion: .*$/appVersion: $version/" deploy/chart/Chart.yaml
 
+git add -u
+git commit -m "Release version: ${version}"
+
 echo "Creating Git tag: v${version}"
 git tag "v${version}"
