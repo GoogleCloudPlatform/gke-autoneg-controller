@@ -46,7 +46,7 @@ Also: prevent using both tag and digest.
 
   {{- $repo -}}@{{ $digest }}
 {{- else if $tag -}}
-  {{- $repo -}}:{{ $digest }}
+  {{- $repo -}}:{{ $tag }}
 {{- else -}}
   {{- $repo -}}:v{{ .Chart.AppVersion }}
 {{- end -}}
