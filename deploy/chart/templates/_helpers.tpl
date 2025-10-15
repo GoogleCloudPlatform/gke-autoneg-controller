@@ -100,26 +100,3 @@ Create the name of the service account to use
 {{- end }}
 {{- end }}
 
-{{/*
-Build the kube-rbac-proxy image reference:
-- Prefer digest: repo@sha256:...
-- Else use tag:  repo:tag
-*/}}
-{{- define "kube_rbac_proxy.image" -}}
-{{- $img := .Values.kube_rbac_proxy.image -}}
-{{- $repo := required "kube_rbac_proxy.image.repository is required" $img.repository -}}
-{{- $tag := default "" ($img.tag | toString | trim) -}}
-{{- $digest := default "" ($img.digest | toString | trim) -}}
-
-{{- if $digest -}}
-  {{- if not (regexMatch `^sha256:[A-Fa-f0-9]{64}$` $digest) -}}
-    {{- fail (printf "kube_rbac_proxy.image.digest must match ^sha256:[0-9a-f]{64}$, got %q" $digest) -}}
-  {{- end -}}
-  {{- $repo -}}@{{ $digest }}
-{{- else -}}
-  {{- if eq $tag "" -}}
-    {{- fail "kube_rbac_proxy.image.tag is empty and no digest was provided" -}}
-  {{- end -}}
-  {{- $repo -}}:{{ $tag }}
-{{- end -}}
-{{- end -}}

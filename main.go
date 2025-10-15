@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"os"
@@ -27,6 +28,7 @@ import (
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/client-go/rest"
 
 	"cloud.google.com/go/compute/metadata"
 	"google.golang.org/api/compute/v1"
@@ -39,6 +41,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/GoogleCloudPlatform/gke-autoneg-controller/controllers"
 	//+kubebuilder:scaffold:imports
@@ -133,18 +137,34 @@ func main() {
 		os.Exit(1)
 	}
 
+	disableHTTP2 := func(c *tls.Config) {
+		setupLog.Info("disabling http/2 for metrics server")
+		c.NextProtos = []string{"http/1.1"}
+	}
+
+	metricsServerOptions := metricsserver.Options{
+		BindAddress:    metricsAddr,
+		SecureServing:  true,
+		TLSOpts:        []func(*tls.Config){disableHTTP2},
+		FilterProvider: filters.WithAuthenticationAndAuthorization,
+	}
+
 	mgrOpts := ctrl.Options{
-		Scheme:                 scheme,
-		MetricsBindAddress:     metricsAddr,
-		Port:                   9443,
+		Scheme:  scheme,
+		Metrics: metricsServerOptions,
+		// Port:                   9443, // Webhook server will default to port 9443
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "9fe89c94.controller.autoneg.dev",
-	}
-	if namespaces != "" {
-		mgrOpts.Cache = cache.Options{
-			Namespaces: strings.Split(namespaces, ","),
-		}
+		NewCache: func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
+			if namespaces != "" {
+				opts.DefaultNamespaces = make(map[string]cache.Config, 0)
+				for _, ns := range strings.Split(namespaces, ",") {
+					opts.DefaultNamespaces[ns] = cache.Config{}
+				}
+			}
+			return cache.New(config, opts)
+		},
 	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), mgrOpts)
