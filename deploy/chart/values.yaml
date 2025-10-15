@@ -3,8 +3,7 @@ name: &name autoneg-controller-manager
 
 createNamespace: true
 
-annotations:
-  {}
+annotations: {}
   # annontated: true
 
 labels:
@@ -46,37 +45,6 @@ service:
   port: 8443
 
 # containers
-
-# kube-rbac-proxy is outdated and will be deprecated soon...
-# https://github.com/kubernetes-sigs/kubebuilder/issues/3524#issuecomment-1687893746
-kube_rbac_proxy:
-  name: kube-rbac-proxy
-  image:
-    # kube_rbac_proxy.image.digest -- Kube RBAC Proxy image digest to use, takes precedence over tag if specified
-    digest: ""
-    # kube_rbac_proxy.image.repository -- Kube RBAC Proxy image repository to use
-    repository: gcr.io/kubebuilder/kube-rbac-proxy
-    # kube_rbac_proxy.image.tag -- Kube RBAC Proxy image tag to use
-    tag: "v0.16.0"
-  securityContext:
-    allowPrivilegeEscalation: false
-    privileged: false
-    capabilities:
-      drop:
-        - ALL
-    readOnlyRootFilesystem: true
-    runAsUser: 65532
-    runAsGroup: 65532
-    runAsNonRoot: true
-    seccompProfile:
-      type: RuntimeDefault
-  args:
-    - --secure-listen-address=0.0.0.0:8443
-    - --upstream=http://127.0.0.1:8080/
-    - --logtostderr=true
-    - --v=10
-  port: 8443
-
 gke_autoneg_controller:
   name: manager
   image:
@@ -90,7 +58,7 @@ gke_autoneg_controller:
     - /manager
   args:
     - --health-probe-bind-address=:8081
-    - --metrics-bind-address=127.0.0.1:8080
+    - --metrics-bind-address=:8443
     - --leader-elect
     - --zap-encoder=json
   securityContext:
