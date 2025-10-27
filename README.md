@@ -87,6 +87,10 @@ The controller parameters can be customized via changing the [controller deploym
 * `--namespaces`: optional. Comma-separated list of namespaces to reconcile.
 * `--always-reconcile`: optional. Makes it possible to reconcile periodically even if the status annotations don't change. Defaults to false.
 * `--reconcile-period`: optional. Sets a reconciliation duration if always-reconcile mode is on. Defaults to 10 hours.
+* `--debug`: optional. Enables development mode with console output and debug level logging. Defaults to false.
+* `--zap-log-level`: optional. Sets the logging level. Options: `debug`, `info`, `error`, or integer values for custom debug levels. The `debug` level shows detailed logs for GCP operations and Kubernetes reconciliation. Defaults to `info`.
+* `--zap-encoder`: optional. Sets the log output format. Options: `json`, `console`. Defaults to `json`.
+* `--zap-devel`: optional. Enables development mode with console encoder, debug level, and warn stack traces.
 
 ## IAM considerations
 

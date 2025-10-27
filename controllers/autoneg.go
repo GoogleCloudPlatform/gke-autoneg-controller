@@ -63,7 +63,7 @@ type errNotFound struct {
 }
 
 func (e *errNotFound) Error() string {
-	return fmt.Sprintf("backend service not found")
+	return "backend service not found"
 }
 
 // Backend returns a compute.Backend struct specified with a backend group
@@ -116,27 +116,43 @@ func NewBackendController(project string, s *compute.Service) *ProdBackendContro
 	}
 }
 
-func (b *ProdBackendController) getBackendService(name string, region string) (svc *compute.BackendService, err error) {
+func (b *ProdBackendController) getBackendService(ctx context.Context, name string, region string) (svc *compute.BackendService, err error) {
+	logger := log.FromContext(ctx)
 	if region == "" {
+		// Log the attempt to get global backend service
+		logger.V(1).Info("Checking gcp global backend service", "project", b.project, "name", name)
 		svc, err = compute.NewBackendServicesService(b.s).Get(b.project, name).Do()
 		if e, ok := err.(*googleapi.Error); ok {
 			if e.Code == 404 {
+				logger.V(1).Info("No gcp global backend service found", "project", b.project, "name", name)
 				err = &errNotFound{Name: name}
+			} else {
+				logger.Error(err, "Failed to get gcp global backend service", "project", b.project, "name", name, "code", e.Code)
 			}
+		} else if err == nil {
+			logger.V(1).Info("Successfully retrieved gcp global backend service", "project", b.project, "name", name, "backends", len(svc.Backends))
 		}
 	} else {
+		// Log the attempt to get regional backend service
+		logger.V(1).Info("Checking gcp regional backend service", "project", b.project, "region", region, "name", name)
 		svc, err = compute.NewRegionBackendServicesService(b.s).Get(b.project, region, name).Do()
 		if e, ok := err.(*googleapi.Error); ok {
 			if e.Code == 404 {
+				logger.V(1).Info("No gcp regional backend service found", "project", b.project, "region", region, "name", name)
 				err = &errNotFound{Name: name}
+			} else {
+				logger.Error(err, "Failed to get gcp regional backend service", "project", b.project, "region", region, "name", name, "code", e.Code)
 			}
+		} else if err == nil {
+			logger.V(1).Info("Successfully retrieved gcp regional backend service", "project", b.project, "region", region, "name", name, "backends", len(svc.Backends))
 		}
 	}
 	return
 
 }
 
-func (b *ProdBackendController) updateBackends(name string, region string, svc *compute.BackendService, forceCapacity map[int]bool, deleting bool) error {
+func (b *ProdBackendController) updateBackends(ctx context.Context, name string, region string, svc *compute.BackendService, forceCapacity map[int]bool, deleting bool) error {
+	logger := log.FromContext(ctx)
 	if len(svc.Backends) == 0 {
 		if deleting {
 			svc.ForceSendFields = []string{"Backends"}
@@ -152,6 +168,7 @@ func (b *ProdBackendController) updateBackends(name string, region string, svc *
 	}
 	// Perform locking to ensure we patch the intended object version
 	if region == "" {
+		logger.V(1).Info("Updating gcp global backend service", "project", b.project, "name", name, "backends", len(svc.Backends), "deleting", deleting)
 		p := compute.NewBackendServicesService(b.s).Patch(b.project, name, svc)
 		p.Header().Set("If-match", svc.Header.Get("ETag"))
 		res, err := p.Do()
@@ -167,8 +184,14 @@ func (b *ProdBackendController) updateBackends(name string, region string, svc *
 		}
 		_, err = backoff.Retry(context.TODO(),
 			operation, backoff.WithBackOff(backoff.NewExponentialBackOff()), backoff.WithMaxElapsedTime(maxElapsedTime))
+		if err != nil {
+			logger.Error(err, "Failed to update gcp global backend service", "project", b.project, "name", name)
+		} else {
+			logger.V(1).Info("Successfully updated gcp global backend service", "project", b.project, "name", name)
+		}
 		return err
 	} else {
+		logger.V(1).Info("Updating gcp regional backend service", "project", b.project, "region", region, "name", name, "backends", len(svc.Backends), "deleting", deleting)
 		p := compute.NewRegionBackendServicesService(b.s).Patch(b.project, region, name, svc)
 		p.Header().Set("If-match", svc.Header.Get("ETag"))
 		res, err := p.Do()
@@ -184,6 +207,11 @@ func (b *ProdBackendController) updateBackends(name string, region string, svc *
 		}
 		_, err = backoff.Retry(context.TODO(), operation,
 			backoff.WithBackOff(backoff.NewExponentialBackOff()), backoff.WithMaxElapsedTime(maxElapsedTime))
+		if err != nil {
+			logger.Error(err, "Failed to update gcp regional backend service", "project", b.project, "region", region, "name", name)
+		} else {
+			logger.V(1).Info("Successfully updated gcp regional backend service", "project", b.project, "region", region, "name", name)
+		}
 		return err
 	}
 }
@@ -208,6 +236,14 @@ func checkOperation(op *compute.Operation) error {
 // and attempts to apply the intended status or return an error
 func (b *ProdBackendController) ReconcileBackends(ctx context.Context, actual, intended AutonegStatus, deleting bool) (err error) {
 	logger := log.FromContext(ctx)
+
+	// Log the start of backend reconciliation
+	logger.V(1).Info("Starting backend reconciliation process",
+		"project", b.project,
+		"num_actual_negs", len(actual.NEGStatus.NEGs),
+		"num_intended_backend_services", len(intended.AutonegConfig.BackendServices),
+		"deleting", deleting)
+
 	// Determine which backends to remove and which to insert/update.
 	removes, upserts := ReconcileStatus(logger, b.project, actual, intended)
 	logger.Info("Reconciling backends", "removes", fmt.Sprintf("%+v", removes), "upserts", fmt.Sprintf("%+v", upserts))
@@ -220,7 +256,7 @@ func (b *ProdBackendController) ReconcileBackends(ctx context.Context, actual, i
 			var oldSvc *compute.BackendService
 			var svcUpdated = false
 			// Get the current state of the backend service.
-			oldSvc, err = b.getBackendService(remove.name, remove.region)
+			oldSvc, err = b.getBackendService(ctx, remove.name, remove.region)
 			var e *errNotFound
 			if errors.As(err, &e) {
 				// If the backend service is gone, we construct a BackendService with the same name
@@ -239,7 +275,7 @@ func (b *ProdBackendController) ReconcileBackends(ctx context.Context, actual, i
 
 			// Check if the same port is in the upsert map and if upsert needs to happen on a different backend service.
 			if upsert.name != "" && upsert.name != remove.name {
-				if newSvc, err = b.getBackendService(upsert.name, upsert.region); err != nil {
+				if newSvc, err = b.getBackendService(ctx, upsert.name, upsert.region); err != nil {
 					return
 				}
 			} else {
@@ -262,7 +298,7 @@ func (b *ProdBackendController) ReconcileBackends(ctx context.Context, actual, i
 			// If a different service needs to be updated based on the upsert map entry for this port,
 			// then save the existing backend service and update the new service.
 			if svcUpdated && (deleting || upsert.name == "" || upsert.name != remove.name) {
-				if err = b.updateBackends(remove.name, remove.region, oldSvc, forceCapacity, deleting); err != nil {
+				if err = b.updateBackends(ctx, remove.name, remove.region, oldSvc, forceCapacity, deleting); err != nil {
 					return
 				}
 			}
@@ -305,7 +341,7 @@ func (b *ProdBackendController) ReconcileBackends(ctx context.Context, actual, i
 				}
 			}
 			if len(upsert.backends) > 0 {
-				err = b.updateBackends(upsert.name, upsert.region, newSvc, forceCapacity, deleting)
+				err = b.updateBackends(ctx, upsert.name, upsert.region, newSvc, forceCapacity, deleting)
 			}
 			if err != nil {
 				return err
@@ -313,6 +349,7 @@ func (b *ProdBackendController) ReconcileBackends(ctx context.Context, actual, i
 		}
 	}
 
+	logger.V(1).Info("Completed backend reconciliation process", "project", b.project)
 	return nil
 }
 
@@ -329,7 +366,7 @@ func ReconcileStatus(logger logr.Logger, project string, actual AutonegStatus, i
 	upserts = make(map[string]map[string]Backends, 0)
 	removes = make(map[string]map[string]Backends, 0)
 
-	// logger.Info("Reconciling statuses", "actual", fmt.Sprintf("%+v", actual), "intended", fmt.Sprintf("%+v", intended))
+	logger.V(1).Info("Reconciling statuses", "actual", fmt.Sprintf("%+v", actual), "intended", fmt.Sprintf("%+v", intended))
 
 	// transform into maps with backend group as key
 	actualBE := map[string]map[string]struct{}{}

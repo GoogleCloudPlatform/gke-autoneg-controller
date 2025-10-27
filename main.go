@@ -29,6 +29,7 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2"
 
 	"cloud.google.com/go/compute/metadata"
 	"google.golang.org/api/compute/v1"
@@ -76,6 +77,7 @@ func main() {
 	var project string
 	var useSvcNeg bool
 	var deregisterNEGsOnAnnotationRemoval bool
+	var debug bool
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.Float64Var(&maxRatePerEndpointDefault, "max-rate-per-endpoint", 0, "Default max rate per endpoint. Can be overridden by user config.")
@@ -93,16 +95,24 @@ func main() {
 	flag.BoolVar(&deregisterNEGsOnAnnotationRemoval, "deregister-negs-on-annotation-removal", true, "Deregister NEGs from backend service when annotation removed.")
 	flag.StringVar(&project, "project-id", "", "The project ID of the Google Cloud project where the backend services are created. If not specified, project ID will be fetched from the Metadata server.")
 	flag.BoolVar(&useSvcNeg, "use-svcneg", false, "Use service neg custom resource to get the NEG zone info.")
+	flag.BoolVar(&debug, "debug", false, "Enable debug logging.")
+
 	opts := zap.Options{
-		Development: true,
+		Development: debug,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
+	// Set logger globally before creating manager to ensure leader election uses same format
+	logger := zap.New(zap.UseFlagOptions(&opts))
+	ctrl.SetLogger(logger)
+
+	// Configure klog to use our zap logger for client-go components (like leader election)
+	klog.SetLogger(logger)
+
 	if useSvcNeg {
 		utilruntime.Must(v1beta1.AddToScheme(scheme))
 	}
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -156,6 +166,7 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "9fe89c94.controller.autoneg.dev",
+		Logger:                 logger, // Ensure manager uses the same logger for leader election
 		NewCache: func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
 			if namespaces != "" {
 				opts.DefaultNamespaces = make(map[string]cache.Config, 0)

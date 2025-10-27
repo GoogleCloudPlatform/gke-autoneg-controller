@@ -72,23 +72,32 @@ type ServiceReconciler struct {
 func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithValues("service", req.NamespacedName)
 
+	// Debug level logging for detailed reconciliation info
+	logger.V(1).Info("Starting reconciliation for service", "namespace", req.Namespace, "name", req.Name)
+
 	svc := &corev1.Service{}
+	logger.V(1).Info("Checking Kubernetes service", "namespace", req.Namespace, "name", req.Name)
 	err := r.Get(ctx, req.NamespacedName, svc)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			// Object not found, return.
+			logger.V(1).Info("Service not found, skipping reconciliation")
 			return r.reconcileResult(nil)
 		}
 		// Error reading thkube object - requeue the request.
+		logger.Error(err, "Failed to get Kubernetes service")
 		return r.reconcileResult(err)
 	}
+	logger.V(1).Info("Successfully retrieved Kubernetes service", "serviceType", svc.Spec.Type, "ports", len(svc.Spec.Ports))
 
 	status, ok, err := getStatuses(ctx, svc.Namespace, svc.Name, svc.ObjectMeta.Annotations, r)
 	// Is this service using autoneg?
 	if !ok {
+		logger.V(1).Info("Service is not using autoneg, skipping")
 		return r.reconcileResult(nil)
 	}
 	if err != nil {
+		logger.Error(err, "Configuration error for service")
 		r.Recorder.Event(svc, "Warning", "ConfigError", err.Error())
 		return r.reconcileResult(err)
 	}
