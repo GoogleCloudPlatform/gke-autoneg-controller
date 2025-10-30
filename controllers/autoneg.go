@@ -37,13 +37,10 @@ import (
 )
 
 const (
-	oldAutonegAnnotation          = "anthos.cft.dev/autoneg"
 	autonegAnnotation             = "controller.autoneg.dev/neg"
-	oldAutonegStatusAnnotation    = "anthos.cft.dev/autoneg-status"
 	autonegStatusAnnotation       = "controller.autoneg.dev/neg-status"
 	negStatusAnnotation           = "cloud.google.com/neg-status"
 	negAnnotation                 = "cloud.google.com/neg"
-	oldAutonegFinalizer           = "anthos.cft.dev/autoneg"
 	autonegFinalizer              = "controller.autoneg.dev/neg"
 	autonegSyncAnnotation         = "controller.autoneg.dev/sync"
 	computeOperationStatusDone    = "DONE"
@@ -74,7 +71,7 @@ func (s AutonegStatus) Backend(name string, port string, group string) compute.B
 	// Extract initial_capacity setting, if set
 	var capacityScaler float64 = 1
 	if capacity := cfg.InitialCapacity; capacity != nil {
-		// This case should not be possible since validateNewConfig checks
+		// This case should not be possible since validateConfig checks
 		// it, but leave the default setting of 100% if capacity is less
 		// than 0 or greater than 100
 		if *capacity >= int32(0) && *capacity <= int32(100) {
@@ -82,7 +79,7 @@ func (s AutonegStatus) Backend(name string, port string, group string) compute.B
 		}
 	}
 	if capacity := cfg.CapacityScaler; capacity != nil {
-		// This case should not be possible since validateNewConfig checks
+		// This case should not be possible since validateConfig checks
 		// it, but leave the default setting of 100% if capacity is less
 		// than 0 or greater than 100
 		if *capacity >= int32(0) && *capacity <= int32(100) {
@@ -493,12 +490,7 @@ func getGroup(project, zone, neg string) string {
 	return fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/networkEndpointGroups/%s", project, zone, neg)
 }
 
-func validateOldConfig(cfg OldAutonegConfig) error {
-	// do additional validation
-	return nil
-}
-
-func validateNewConfig(config AutonegConfig) error {
+func validateConfig(config AutonegConfig) error {
 	for _, cfgs := range config.BackendServices {
 		for _, cfg := range cfgs {
 			if cfg.InitialCapacity != nil {
@@ -535,7 +527,6 @@ func getStatuses(ctx context.Context, namespace string, name string, annotations
 	}
 
 	// Is this service using autoneg in new mode?
-	oldOk := false
 	tmp, newOk := annotations[autonegAnnotation] // controller.autoneg.dev/neg
 	if newOk {
 		valid = true
@@ -577,11 +568,9 @@ func getStatuses(ctx context.Context, namespace string, name string, annotations
 		}
 
 		// Is this autoneg config valid?
-		if err = validateNewConfig(s.config); err != nil {
+		if err = validateConfig(s.config); err != nil {
 			return
 		}
-
-		s.newConfig = true
 	}
 
 	// Does service has new auto neg status?
@@ -591,68 +580,11 @@ func getStatuses(ctx context.Context, namespace string, name string, annotations
 		if !newOk && r.DeregisterNEGsOnAnnotationRemoval {
 			s.config = AutonegConfig{}
 			valid = true
-			s.newConfig = true
 		}
 		// Found a status, decode
 		if err = json.Unmarshal([]byte(tmp), &s.status); err != nil {
 			err = fmt.Errorf("failed to decode autoneg-status annotation %s: %w", autonegStatusAnnotation, err)
 			return
-		}
-	}
-
-	if !newOk && !statusOk {
-		// Is this service using autoneg in legacy mode?
-		tmp, oldOk = annotations[oldAutonegAnnotation]
-		if oldOk {
-			valid = true
-
-			if err = json.Unmarshal([]byte(tmp), &s.oldConfig); err != nil {
-				err = fmt.Errorf("failed to decode %s annotation %s: %w", oldAutonegAnnotation, tmp, err)
-				return
-			}
-
-			// Default to the k8s service name
-			if s.oldConfig.Name == "" {
-				s.oldConfig.Name = name
-			}
-
-			// Is this autoneg config valid?
-			if err = validateOldConfig(s.oldConfig); err != nil {
-				return
-			}
-
-			// Convert the old configuration to a new style configuration
-			s.config.BackendServices = make(map[string]map[string]AutonegNEGConfig, 1)
-			if len(s.negConfig.ExposedPorts) == 1 {
-				var firstPort string
-				for k, _ := range s.negConfig.ExposedPorts {
-					firstPort = k
-					break
-				}
-				s.config.BackendServices[firstPort] = make(map[string]AutonegNEGConfig, 1)
-				s.config.BackendServices[firstPort][s.oldConfig.Name] = AutonegNEGConfig{
-					Name:        s.oldConfig.Name,
-					Rate:        s.oldConfig.Rate,
-					Connections: 0,
-				}
-			} else {
-				err = fmt.Errorf("more than one port in %s, but autoneg configuration is for one or no ports", negAnnotation)
-				return
-			}
-		}
-
-		tmp, ok = annotations[oldAutonegStatusAnnotation]
-		if ok {
-			// Status annotation found but auto neg annotation not found set empty auto neg config
-			if !oldOk && r.DeregisterNEGsOnAnnotationRemoval {
-				s.oldConfig = OldAutonegConfig{}
-				valid = true
-			}
-			// Found a status, decode
-			if err = json.Unmarshal([]byte(tmp), &s.oldStatus); err != nil {
-				err = fmt.Errorf("failed to decode %s annotation %s: %w", oldAutonegStatusAnnotation, tmp, err)
-				return
-			}
 		}
 	}
 

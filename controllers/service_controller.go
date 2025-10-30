@@ -104,7 +104,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	deleting := false
 	// Process deletion
-	if !svc.ObjectMeta.DeletionTimestamp.IsZero() && (containsString(svc.ObjectMeta.Finalizers, oldAutonegFinalizer) || containsString(svc.ObjectMeta.Finalizers, autonegFinalizer)) {
+	if !svc.ObjectMeta.DeletionTimestamp.IsZero() && (containsString(svc.ObjectMeta.Finalizers, autonegFinalizer)) {
 		logger.Info("Deleting service")
 		deleting = true
 	}
@@ -116,11 +116,6 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	logger.Info("Existing status", "status", fmt.Sprintf("%+v", status))
 	if status.syncConfig != nil {
 		intendedStatus.AutonegSyncConfig = status.syncConfig
-	}
-
-	oldIntendedStatus := OldAutonegStatus{
-		OldAutonegConfig: status.oldConfig,
-		NEGStatus:        status.negStatus,
 	}
 
 	if deleting {
@@ -149,22 +144,13 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if deleting {
 		// Remove finalizer and clear status
 		logger.Info("Removing finalizer")
-		svc.ObjectMeta.Finalizers = removeString(svc.ObjectMeta.Finalizers, oldAutonegFinalizer)
 		svc.ObjectMeta.Finalizers = removeString(svc.ObjectMeta.Finalizers, autonegFinalizer)
 		delete(svc.ObjectMeta.Annotations, autonegStatusAnnotation)
-		delete(svc.ObjectMeta.Annotations, oldAutonegStatusAnnotation)
 	} else {
-		// Remove old finalizer
-		if containsString(svc.ObjectMeta.Finalizers, oldAutonegFinalizer) {
-			logger.Info("Upgrading finalizer")
-			svc.ObjectMeta.Finalizers = removeString(svc.ObjectMeta.Finalizers, oldAutonegFinalizer)
+		// Add the finalizer annotation if it doesn't exist.
+		if !containsString(svc.ObjectMeta.Finalizers, autonegFinalizer) {
+			logger.Info("Adding finalizer")
 			svc.ObjectMeta.Finalizers = append(svc.ObjectMeta.Finalizers, autonegFinalizer)
-		} else {
-			// Add the finalizer annotation if it doesn't exist.
-			if !containsString(svc.ObjectMeta.Finalizers, autonegFinalizer) {
-				logger.Info("Adding finalizer")
-				svc.ObjectMeta.Finalizers = append(svc.ObjectMeta.Finalizers, autonegFinalizer)
-			}
 		}
 
 		// Write status to annotations
@@ -174,17 +160,6 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			return r.reconcileResult(err)
 		}
 		svc.ObjectMeta.Annotations[autonegStatusAnnotation] = string(anStatus)
-
-		if !status.newConfig {
-			oldStatus, err := json.Marshal(oldIntendedStatus)
-
-			if err != nil {
-				logger.Error(err, "json marshal error")
-				return r.reconcileResult(err)
-			}
-
-			svc.ObjectMeta.Annotations[oldAutonegStatusAnnotation] = string(oldStatus)
-		}
 	}
 
 	if err = r.Update(ctx, svc); err != nil {

@@ -290,6 +290,29 @@ resource "kubernetes_deployment" "deployment_autoneg_controller_manager" {
           run_as_non_root = true
         }
 
+        affinity {
+          pod_anti_affinity {
+            preferred_during_scheduling_ignored_during_execution {
+              weight = 1
+              pod_affinity_term {
+                label_selector {
+                  match_expressions {
+                    key      = "app"
+                    operator = "In"
+                    values   = ["autoneg"]
+                  }
+                  match_expressions {
+                    key      = "control-plane"
+                    operator = "In"
+                    values   = ["controller-manager"]
+                  }
+                }
+                topology_key = "kubernetes.io/hostname"
+              }
+            }
+          }
+        }
+
         container {
           name = "manager"
 

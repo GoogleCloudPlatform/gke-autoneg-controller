@@ -29,5 +29,6 @@ $SED -i -e "s/version: .*$/version: $NEWCHARTVERSION/" deploy/chart/Chart.yaml
 
 $SED -i -e "s/appVersion: .*$/appVersion: $version/" deploy/chart/Chart.yaml
 
-echo "Creating Git tag: v${version}"
-git tag "v${version}"
+$SED -i -e "s/gke-autoneg-controller\/gke-autoneg-controller:[^\"]*\"/gke-autoneg-controller\/gke-autoneg-controller:v$version/g" README.md
+
+echo git tag "v${version}"

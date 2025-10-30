@@ -212,7 +212,7 @@ metadata:
   name: autoneg-controller-manager
   namespace: autoneg-system
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: autoneg
@@ -223,6 +223,20 @@ spec:
         app: autoneg
         control-plane: controller-manager
     spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - autoneg
+              - key: control-plane
+                operator: In
+                values:
+                - controller-manager
+            topologyKey: kubernetes.io/hostname
       containers:
       - args:
         - --health-probe-bind-address=:8081

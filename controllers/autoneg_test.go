@@ -49,8 +49,6 @@ var (
 	validSyncConfig    = `{"capacity_scaler":true}`
 	invalidSyncConfig  = `{"capacity_scaler":"foobar"}`
 	invalidStatus      = `{`
-	oldValidConfig     = `{"name":"test", "max_rate_per_endpoint":100}`
-	oldBrokenConfig    = `{"name":"test", "max_rate_per_endpoint":"100"}`
 
 	validNegConfig   = `{"exposed_ports": {"80":{"name":"test"}}}`
 	wrongNegConfig   = `{"exposed_ports": {}}`
@@ -186,104 +184,6 @@ var statusTests = []struct {
 	},
 }
 
-var oldStatusTests = []struct {
-	name        string
-	annotations map[string]string
-	valid       bool
-	err         bool
-}{
-	{
-		"(legacy) not using autoneg",
-		map[string]string{},
-		false,
-		false,
-	},
-	{
-		"(legacy) autoneg with malformed config",
-		map[string]string{
-			oldAutonegAnnotation: malformedJSON,
-			negAnnotation:        validNegConfig,
-		},
-		true,
-		true,
-	},
-	{
-		"(legacy) autoneg with broken config",
-		map[string]string{
-			oldAutonegAnnotation: oldBrokenConfig,
-			negAnnotation:        validNegConfig,
-		},
-		true,
-		true,
-	},
-	{
-		"(legacy) valid autoneg",
-		map[string]string{
-			oldAutonegAnnotation: oldValidConfig,
-			negAnnotation:        validNegConfig,
-		},
-		true,
-		false,
-	},
-	{
-		"(legacy) valid autoneg with too many ports",
-		map[string]string{
-			oldAutonegAnnotation: oldValidConfig,
-			negAnnotation:        tooManyNegConfig,
-		},
-		true,
-		true,
-	},
-	{
-		"(legacy) valid autoneg with invalid status",
-		map[string]string{
-			oldAutonegAnnotation:       oldValidConfig,
-			oldAutonegStatusAnnotation: malformedJSON,
-			negAnnotation:              validNegConfig,
-		},
-		true,
-		true,
-	},
-	{
-		"(legacy) valid autoneg with valid status",
-		map[string]string{
-			oldAutonegAnnotation:       oldValidConfig,
-			oldAutonegStatusAnnotation: validStatus,
-			negAnnotation:              validNegConfig,
-		},
-		true,
-		false,
-	},
-	{
-		"(legacy) valid autoneg with invalid neg status",
-		map[string]string{
-			oldAutonegAnnotation: oldValidConfig,
-			negStatusAnnotation:  malformedJSON,
-			negAnnotation:        validNegConfig,
-		},
-		true,
-		true,
-	},
-	{
-		"(legacy) valid autoneg with valid neg status",
-		map[string]string{
-			oldAutonegAnnotation: oldValidConfig,
-			negStatusAnnotation:  validAutonegStatus,
-			negAnnotation:        validNegConfig,
-		},
-		true,
-		false,
-	},
-	{
-		"(legacy) valid autoneg status without autoneg",
-		map[string]string{
-			oldAutonegStatusAnnotation: validStatus,
-		},
-		true,
-		false,
-	},
-}
-
 func TestGetStatuses(t *testing.T) {
 	var serviceReconciler = ServiceReconciler{
 		ServiceNameTemplate:               "{namespace}-{name}-{port}-{hash}",
@@ -291,29 +191,6 @@ func TestGetStatuses(t *testing.T) {
 		DeregisterNEGsOnAnnotationRemoval: true,
 	}
 	for _, st := range statusTests {
-		_, valid, err := getStatuses(context.Background(), "ns", "test", st.annotations, &serviceReconciler)
-		if err != nil && !st.err {
-			t.Errorf("Set %q: expected no error, got one: %v", st.name, err)
-		}
-		if err == nil && st.err {
-			t.Errorf("Set %q: expected error, got none", st.name)
-		}
-		if !valid && st.valid {
-			t.Errorf("Set %q: expected autoneg config, got none", st.name)
-		}
-		if valid && !st.valid {
-			t.Errorf("Set %q: expected no autoneg config, got one", st.name)
-		}
-	}
-}
-
-func TestGetOldStatuses(t *testing.T) {
-	var serviceReconciler = ServiceReconciler{
-		ServiceNameTemplate:               "{namespace}-{name}-{port}-{hash}",
-		AllowServiceName:                  true,
-		DeregisterNEGsOnAnnotationRemoval: true,
-	}
-	for _, st := range oldStatusTests {
 		_, valid, err := getStatuses(context.Background(), "ns", "test", st.annotations, &serviceReconciler)
 		if err != nil && !st.err {
 			t.Errorf("Set %q: expected no error, got one: %v", st.name, err)
@@ -381,37 +258,9 @@ func TestGetStatusesOnlyAutonegStatusAnnotation(t *testing.T) {
 	if !valid {
 		t.Errorf("Expected autoneg status config, got none")
 	}
-
-	if !statuses.newConfig {
-		t.Errorf("Expected new autoneg config")
-	}
 	if statuses.config.BackendServices != nil {
 		t.Errorf("Expected nil backend services")
 	}
-
-}
-
-func TestGetStatusesOnlyOldAutonegStatusAnnotation(t *testing.T) {
-	var serviceReconciler = ServiceReconciler{
-		ServiceNameTemplate:               "{namespace}-{name}-{port}-{hash}",
-		AllowServiceName:                  true,
-		DeregisterNEGsOnAnnotationRemoval: true,
-	}
-	statuses, valid, err := getStatuses(context.Background(), "ns", "test", map[string]string{oldAutonegStatusAnnotation: validAutonegStatus}, &serviceReconciler)
-	if err != nil {
-		t.Errorf("Expected no error, got one: %v", err)
-	}
-	if !valid {
-		t.Errorf("Expected old autoneg status config, got none")
-	}
-
-	if statuses.newConfig {
-		t.Errorf("Expected old autoneg config")
-	}
-	if statuses.oldConfig.Name != "" {
-		t.Errorf("Expected empty old autoneg config")
-	}
-
 }
 
 func TestDefaultMaxRatePerEndpointWhenOverrideIsSet(t *testing.T) {
@@ -503,30 +352,6 @@ func TestDefaultMaxConnectionsEndpointWhenOverrideIsNotSet(t *testing.T) {
 	}
 	if cfg.Connections != 1234 {
 		t.Errorf("Expected max_connections_per_endpoint to be 1234 but got: \n%v", cfg.Rate)
-	}
-}
-
-func TestValidateOldConfig(t *testing.T) {
-	tests := []struct {
-		name   string
-		config OldAutonegConfig
-		err    bool
-	}{
-		{
-			"default config",
-			OldAutonegConfig{},
-			false,
-		},
-	}
-
-	for _, ct := range tests {
-		err := validateOldConfig(ct.config)
-		if err == nil && ct.err {
-			t.Errorf("Set %q: expected error, got none", ct.name)
-		}
-		if err != nil && !ct.err {
-			t.Errorf("Set %q: expected no error, got one: %v", ct.name, err)
-		}
 	}
 }
 
@@ -643,7 +468,7 @@ func TestValidateNewConfig(t *testing.T) {
 	}
 
 	for _, ct := range tests {
-		err := validateNewConfig(ct.config)
+		err := validateConfig(ct.config)
 		if err == nil && ct.err {
 			t.Errorf("Set %q: expected error, got none", ct.name)
 		}

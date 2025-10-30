@@ -26,13 +26,6 @@ type NEGStatus struct {
 }
 
 // AutonegConfig specifies the intended configuration of autoneg
-// stored in the anthos.cft.dev/autoneg annotation
-type OldAutonegConfig struct {
-	Name string  `json:"name"`
-	Rate float64 `json:"max_rate_per_endpoint"`
-}
-
-// AutonegConfig specifies the intended configuration of autoneg
 // stored in the controller.autoneg.dev/neg annotation
 type AutonegConfig struct {
 	BackendServices map[string]map[string]AutonegNEGConfig `json:"backend_services"`
@@ -59,13 +52,6 @@ type AutonegSyncConfig struct {
 }
 
 // AutonegStatus specifies the reconciled status of autoneg
-// stored in the anthos.cft.dev/autoneg-status annotation
-type OldAutonegStatus struct {
-	OldAutonegConfig
-	NEGStatus
-}
-
-// AutonegStatus specifies the reconciled status of autoneg
 // stored in the controller.autoneg.dev/neg annotation
 type AutonegStatus struct {
 	AutonegConfig
@@ -75,13 +61,10 @@ type AutonegStatus struct {
 
 // Statuses represents the autoneg-relevant structs fetched from annotations
 type Statuses struct {
-	oldConfig  OldAutonegConfig
 	config     AutonegConfig
-	oldStatus  OldAutonegStatus
 	status     AutonegStatus
 	negStatus  NEGStatus
 	negConfig  NEGConfig
-	newConfig  bool
 	syncConfig *AutonegSyncConfig
 }
 
