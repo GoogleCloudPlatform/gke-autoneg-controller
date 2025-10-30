@@ -163,7 +163,7 @@ module "autoneg" {
 
   # NOTE: You may need to build your own image if you rely on features merged between releases, and do
   # not wish to use the `latest` image.
-  controller_image = "ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:v2.0.0"
+  controller_image = "ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:v2.0.0
 }
 ```
 
@@ -196,25 +196,31 @@ module "autoneg" {
 resource "helm_release" "autoneg" {
   name       = "autoneg"
   chart      = "autoneg-controller-manager"
+  version    = "1.0.2"
   repository = "https://googlecloudplatform.github.io/gke-autoneg-controller/"
   namespace  = "autoneg-system"
 
   create_namespace = true
 
-  set {
-    name  = "createNamespace"
-    value = false
-  }
-
-  set {
-    name  = "serviceAccount.annotations.iam\\.gke\\.io/gcp-service-account"
-    value = module.autoneg.service_account_email
-  }
-
-  set {
-    name  = "serviceAccount.automountServiceAccountToken"
-    value = true
-  }
+  set = [
+    {
+      name  = "createNamespace"
+      value = false
+    }, 
+    {
+      name  = "serviceAccount.annotations.iam\\.gke\\.io/gcp-service-account"
+      value = module.autoneg.service_account_email
+    }, 
+    // Using your own image
+    // {
+    //   name  = "gke_autoneg_controller.image.repository"
+    //   value = "europe-west4-docker.pkg.dev/your-project/autoneg/controller"
+    // }, 
+    // {
+    //   name  = "gke_autoneg_controller.image.tag"
+    //   value = "v2.0.0"
+    // }
+  ]
 }
 ```
 

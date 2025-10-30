@@ -90,6 +90,14 @@ rules:
       - get
       - patch
       - update
+  - apiGroups:
+      - "networking.gke.io"
+    resources:
+      - servicenetworkendpointgroups
+    verbs:
+      - get
+      - list
+      - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -160,27 +168,28 @@ spec:
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchExpressions:
-                  - key: app
-                    operator: In
-                    values:
-                      - autoneg
-                  - key: control-plane
-                    operator: In
-                    values:
-                      - controller-manager
-              topologyKey: kubernetes.io/hostname
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - autoneg
+                    - key: control-plane
+                      operator: In
+                      values:
+                        - controller-manager
+                topologyKey: kubernetes.io/hostname
       containers:
         - args:
             - --health-probe-bind-address=:8081
             - --metrics-bind-address=:8443
-            - --leader-elect
             - --zap-encoder=json
             - --namespaces=autoneg-system
           command:
             - /manager
-          image: ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:v1.4.3
+          image: ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:v2.0.0
           livenessProbe:
             httpGet:
               path: /healthz

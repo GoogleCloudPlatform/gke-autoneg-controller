@@ -109,6 +109,12 @@ resource "kubernetes_cluster_role" "clusterrole_autoneg_manager_role" {
     resources  = ["services/status"]
     verbs      = ["get", "patch", "update"]
   }
+
+  rule {
+    api_groups = ["networking.gke.io"]
+    resources  = ["servicenetworkendpointgroups"]
+    verbs      = ["get", "list", "watch"]
+  }
 }
 
 resource "kubernetes_cluster_role" "clusterrole_autoneg_metrics_reader" {
@@ -293,7 +299,7 @@ resource "kubernetes_deployment" "deployment_autoneg_controller_manager" {
         affinity {
           pod_anti_affinity {
             preferred_during_scheduling_ignored_during_execution {
-              weight = 1
+              weight = 100
               pod_affinity_term {
                 label_selector {
                   match_expressions {
@@ -319,7 +325,7 @@ resource "kubernetes_deployment" "deployment_autoneg_controller_manager" {
           image             = var.controller_image
           image_pull_policy = var.image_pull_policy
 
-          args    = ["--health-probe-bind-address=:8081", "--metrics-bind-address=:8443", "--leader-elect", "--zap-encoder=json"]
+          args    = ["--health-probe-bind-address=:8081", "--metrics-bind-address=:8443", "--zap-encoder=json"]
           command = ["/manager"]
 
           security_context {
