@@ -30,12 +30,6 @@ variable "image_pull_policy" {
   default     = "IfNotPresent"
 }
 
-variable "kube_rbac_proxy_image" {
-  type        = string
-  description = "kuber-rbac-proxy container image"
-  default     = "gcr.io/kubebuilder/kube-rbac-proxy:v0.16.0"
-}
-
 variable "namespace" {
   type        = string
   description = "Autoneg namespace"
@@ -76,7 +70,7 @@ variable "priority_class_name" {
 variable "replicas" {
   description = "Number of replicas for the deployment"
   type        = number
-  default     = 1
+  default     = 2
 }
 
 variable "pod_disruption_budget" {
