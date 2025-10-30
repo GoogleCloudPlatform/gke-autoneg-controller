@@ -97,7 +97,8 @@ variable "pod_disruption_budget" {
   })
   description = "Pod Disruption Budget configuration"
   default = {
-    enabled       = true
-    min_available = 1
+    enabled         = true
+    min_available   = 1
+    max_unavailable = null
   }
 }

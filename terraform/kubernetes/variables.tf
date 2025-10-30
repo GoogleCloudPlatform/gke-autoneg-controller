@@ -81,8 +81,8 @@ variable "pod_disruption_budget" {
     max_unavailable = optional(number)
   })
   default = {
-    enabled         = false
-    min_available   = null
+    enabled         = true
+    min_available   = 1
     max_unavailable = null
   }
   validation {
@@ -90,7 +90,13 @@ variable "pod_disruption_budget" {
     error_message = "When pod_disruption_budget is enabled, at least one of min_available or max_unavailable must be set"
   }
   validation {
-    condition     = var.pod_disruption_budget.enabled ? (var.pod_disruption_budget.min_available != null && var.pod_disruption_budget.max_unavailable != null) : true
+    condition     = var.pod_disruption_budget.enabled ? !(var.pod_disruption_budget.min_available != null && var.pod_disruption_budget.max_unavailable != null) : true
     error_message = "When pod_disruption_budget is enabled, only one of min_available or max_unavailable can be set"
   }
+}
+
+variable "metrics_service" {
+  description = "Create service for metrics"
+  type        = bool
+  default     = false
 }

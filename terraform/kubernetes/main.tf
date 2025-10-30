@@ -219,12 +219,13 @@ resource "kubernetes_cluster_role_binding" "clusterrolebinding_autoneg_proxy_rol
 }
 
 resource "kubernetes_service" "service_autoneg_controller_manager_metrics_service" {
+  count = var.metrics_service ? 1 : 0
   metadata {
     annotations = {
       "prometheus.io/port"   = "8443"
       "prometheus.io/scheme" = "https"
       "prometheus.io/scrape" = "true"
-      "cloud.google.com/neg" = "{}"
+      "cloud.google.com/neg" = "{\"exposed_ports\":{\"8443\":{}}}"
     }
     labels = {
       "app"           = "autoneg"
@@ -382,7 +383,7 @@ resource "kubernetes_deployment" "deployment_autoneg_controller_manager" {
   ]
 }
 
-resource "kubernetes_pod_disruption_budget" "pdb_autoneg_controller" {
+resource "kubernetes_pod_disruption_budget_v1" "pdb_autoneg_controller" {
   count = var.pod_disruption_budget.enabled ? 1 : 0
 
   metadata {

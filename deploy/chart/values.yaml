@@ -44,6 +44,11 @@ podDisruptionBudget:
   minAvailable: 1
   # maxUnavailable: 1
 
+# Pod Monitoring configuration for managed collection
+podMonitoring:
+  enabled: true
+  port: 8443
+
 serviceAccount:
   create: true
   name: autoneg-controller-manager
