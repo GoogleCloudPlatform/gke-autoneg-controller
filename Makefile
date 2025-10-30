@@ -75,6 +75,9 @@ BUILD_TIME = $(shell date)
 docker-build: test
 	${DOCKER_BIN} build ${DOCKER_FLAGS} ${LABELS} . -t ${IMG}
 
+docker-buildx: test
+	docker buildx build ${DOCKER_FLAGS} ${LABELS} . -t ${IMG}
+
 # Push the docker image
 docker-push:
 	${DOCKER_BIN} push ${DOCKER_FLAGS} ${IMG}

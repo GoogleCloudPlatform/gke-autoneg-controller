@@ -18,7 +18,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -107,7 +106,8 @@ type TestBackendController struct {
 
 func (t *TestBackendController) ReconcileBackends(context.Context, AutonegStatus, AutonegStatus, bool) error {
 	t.Counter++
-	fmt.Print(t.Counter)
+	// Use controller logger for better test output control
+	logf.Log.WithName("test-backend-controller").Info("ReconcileBackends called", "counter", t.Counter)
 	return nil
 }
 
