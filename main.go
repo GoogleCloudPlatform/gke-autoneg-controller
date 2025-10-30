@@ -49,7 +49,7 @@ import (
 	//+kubebuilder:scaffold:imports
 )
 
-const useragent = "google-pso-tool/gke-autoneg-controller/1.4.3"
+const useragent = "google-pso-tool/gke-autoneg-controller/2.0.0"
 
 var (
 	scheme    = runtime.NewScheme()
@@ -83,18 +83,18 @@ func main() {
 	flag.Float64Var(&maxRatePerEndpointDefault, "max-rate-per-endpoint", 0, "Default max rate per endpoint. Can be overridden by user config.")
 	flag.Float64Var(&maxConnectionsPerEndpointDefault, "max-connections-per-endpoint", 0, "Default max connections per endpoint. Can be overridden by user config.")
 	flag.StringVar(&namespaces, "namespaces", "", "List of namespaces where Services should be reconciled.")
-	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
+	flag.BoolVar(&enableLeaderElection, "leader-elect", true,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&serviceNameTemplate, "default-backendservice-name", "{name}-{port}",
 		"A naming template consists of {namespace}, {name}, {port} or {hash} separated by hyphens, "+
 			"where {hash} is the first 8 digits of a hash of other given information")
 	flag.BoolVar(&allowServiceName, "enable-custom-service-names", true, "Enable using custom service names in autoneg annotation.")
-	flag.BoolVar(&alwaysReconcile, "always-reconcile", false, "Periodically reconciles even if annotation statuses don't change.")
-	flag.StringVar(&reconcilePeriod, "reconcile-period", "", "The minimum frequency at which watched resources are reconciled, e.g. 10m. Defaults to 10h if not set.")
+	flag.BoolVar(&alwaysReconcile, "always-reconcile", true, "Periodically reconciles even if annotation statuses don't change.")
+	flag.StringVar(&reconcilePeriod, "reconcile-period", "5m", "The minimum frequency at which watched resources are reconciled, e.g. 10m. Defaults to 5m if not set.")
 	flag.BoolVar(&deregisterNEGsOnAnnotationRemoval, "deregister-negs-on-annotation-removal", true, "Deregister NEGs from backend service when annotation removed.")
 	flag.StringVar(&project, "project-id", "", "The project ID of the Google Cloud project where the backend services are created. If not specified, project ID will be fetched from the Metadata server.")
-	flag.BoolVar(&useSvcNeg, "use-svcneg", false, "Use service neg custom resource to get the NEG zone info.")
+	flag.BoolVar(&useSvcNeg, "use-svcneg", true, "Use service neg custom resource to get the NEG zone info.")
 	flag.BoolVar(&debug, "debug", false, "Enable debug logging.")
 
 	opts := zap.Options{

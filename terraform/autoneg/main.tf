@@ -42,7 +42,6 @@ module "kubernetes" {
   project_id            = var.project_id
   controller_image      = var.controller_image
   image_pull_policy     = var.image_pull_policy
-  kube_rbac_proxy_image = var.kube_rbac_proxy_image
   namespace             = var.namespace
   service_account_id    = var.service_account_id
   workload_identity     = var.workload_identity

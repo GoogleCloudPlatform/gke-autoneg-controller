@@ -29,7 +29,7 @@ In your Kubernetes service, two annotations are required in your service definit
 
 * `cloud.google.com/neg` enables the GKE NEG controller; specify as [standalone NEGs](https://cloud.google.com/kubernetes-engine/docs/how-to/standalone-neg)
 * `controller.autoneg.dev/neg` specifies name and other configuration
-  * Previous version used `anthos.cft.dev/autoneg` as annotation and it's still supported, but deprecated and will be removed in subsequent releases.
+   * (Previous version used `anthos.cft.dev/autoneg`, which has been removed as of version 2.0.0)
 
 ### Example annotations
 
@@ -85,8 +85,10 @@ The controller parameters can be customized via changing the [controller deploym
 * `--max-rate-per-endpoint`: optional. Sets a default value for max-rate-per-endpoint that can be overridden by user config. Defaults to 0.
 * `--max-connections-per-endpoint`: optional. Same as above but for connections.
 * `--namespaces`: optional. Comma-separated list of namespaces to reconcile.
-* `--always-reconcile`: optional. Makes it possible to reconcile periodically even if the status annotations don't change. Defaults to false.
-* `--reconcile-period`: optional. Sets a reconciliation duration if always-reconcile mode is on. Defaults to 10 hours.
+* `--always-reconcile`: optional. Makes it possible to reconcile periodically even if the status annotations don't change. Defaults to true (since version 2.0.0).
+* `--reconcile-period`: optional. Sets a reconciliation duration if always-reconcile mode is on. Defaults to 5 minutes (since version 2.0.0).
+* `--use-svcneg`: optional. Uses the `ServiceNetworkEndpointGroup` object to retrieve the NEGs. Defaults to true (since version 2.0.0).
+* `--leader-elect`: optional. Performs leader election, so only single controller is active at a time. Defaults to true (since version 2.0.0).
 * `--debug`: optional. Enables development mode with console output and debug level logging. Defaults to false.
 * `--zap-log-level`: optional. Sets the logging level. Options: `debug`, `info`, `error`, or integer values for custom debug levels. The `debug` level shows detailed logs for GCP operations and Kubernetes reconciliation. Defaults to `info`.
 * `--zap-encoder`: optional. Sets the log output format. Options: `json`, `console`. Defaults to `json`.
@@ -161,7 +163,7 @@ module "autoneg" {
 
   # NOTE: You may need to build your own image if you rely on features merged between releases, and do
   # not wish to use the `latest` image.
-  controller_image = "ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:v1.1.0"
+  controller_image = "ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:v2.0.0
 }
 ```
 
@@ -194,25 +196,31 @@ module "autoneg" {
 resource "helm_release" "autoneg" {
   name       = "autoneg"
   chart      = "autoneg-controller-manager"
+  version    = "1.0.2"
   repository = "https://googlecloudplatform.github.io/gke-autoneg-controller/"
   namespace  = "autoneg-system"
 
   create_namespace = true
 
-  set {
-    name  = "createNamespace"
-    value = false
-  }
-
-  set {
-    name  = "serviceAccount.annotations.iam\\.gke\\.io/gcp-service-account"
-    value = module.autoneg.service_account_email
-  }
-
-  set {
-    name  = "serviceAccount.automountServiceAccountToken"
-    value = true
-  }
+  set = [
+    {
+      name  = "createNamespace"
+      value = false
+    }, 
+    {
+      name  = "serviceAccount.annotations.iam\\.gke\\.io/gcp-service-account"
+      value = module.autoneg.service_account_email
+    }, 
+    // Using your own image
+    // {
+    //   name  = "gke_autoneg_controller.image.repository"
+    //   value = "europe-west4-docker.pkg.dev/your-project/autoneg/controller"
+    // }, 
+    // {
+    //   name  = "gke_autoneg_controller.image.tag"
+    //   value = "v2.0.0"
+    // }
+  ]
 }
 ```
 

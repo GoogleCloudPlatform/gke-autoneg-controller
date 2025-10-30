@@ -38,6 +38,10 @@ spec:
       serviceAccountName: {{ include "autoneg.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.securityContext | nindent 8 }}
+      {{- if .Values.volumes }}
+      volumes:
+        {{- toYaml .Values.volumes | nindent 8 }}
+      {{- end }}
       {{- if .Values.initContainers }}
       initContainers:
       {{- range .Values.initContainers }}
@@ -88,6 +92,8 @@ spec:
           {{- end }}
           resources:
             {{- toYaml .Values.gke_autoneg_controller.resources | nindent 12 }}
+          volumeMounts:
+            {{- toYaml .Values.gke_autoneg_controller.volumeMounts | nindent 12 }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

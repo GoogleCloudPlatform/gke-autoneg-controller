@@ -30,12 +30,6 @@ variable "image_pull_policy" {
   default     = "IfNotPresent"
 }
 
-variable "kube_rbac_proxy_image" {
-  type        = string
-  description = "kuber-rbac-proxy container image"
-  default     = "gcr.io/kubebuilder/kube-rbac-proxy:v0.16.0"
-}
-
 variable "namespace" {
   type        = string
   description = "Autoneg namespace"
@@ -76,7 +70,7 @@ variable "priority_class_name" {
 variable "replicas" {
   description = "Number of replicas for the deployment"
   type        = number
-  default     = 1
+  default     = 2
 }
 
 variable "pod_disruption_budget" {
@@ -87,8 +81,8 @@ variable "pod_disruption_budget" {
     max_unavailable = optional(number)
   })
   default = {
-    enabled         = false
-    min_available   = null
+    enabled         = true
+    min_available   = 1
     max_unavailable = null
   }
   validation {
@@ -96,7 +90,13 @@ variable "pod_disruption_budget" {
     error_message = "When pod_disruption_budget is enabled, at least one of min_available or max_unavailable must be set"
   }
   validation {
-    condition     = var.pod_disruption_budget.enabled ? (var.pod_disruption_budget.min_available != null && var.pod_disruption_budget.max_unavailable != null) : true
+    condition     = var.pod_disruption_budget.enabled ? !(var.pod_disruption_budget.min_available != null && var.pod_disruption_budget.max_unavailable != null) : true
     error_message = "When pod_disruption_budget is enabled, only one of min_available or max_unavailable can be set"
   }
+}
+
+variable "metrics_service" {
+  description = "Create service for metrics"
+  type        = bool
+  default     = false
 }

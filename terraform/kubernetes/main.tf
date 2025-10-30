@@ -109,6 +109,12 @@ resource "kubernetes_cluster_role" "clusterrole_autoneg_manager_role" {
     resources  = ["services/status"]
     verbs      = ["get", "patch", "update"]
   }
+
+  rule {
+    api_groups = ["networking.gke.io"]
+    resources  = ["servicenetworkendpointgroups"]
+    verbs      = ["get", "list", "watch"]
+  }
 }
 
 resource "kubernetes_cluster_role" "clusterrole_autoneg_metrics_reader" {
@@ -213,12 +219,13 @@ resource "kubernetes_cluster_role_binding" "clusterrolebinding_autoneg_proxy_rol
 }
 
 resource "kubernetes_service" "service_autoneg_controller_manager_metrics_service" {
+  count = var.metrics_service ? 1 : 0
   metadata {
     annotations = {
       "prometheus.io/port"   = "8443"
       "prometheus.io/scheme" = "https"
       "prometheus.io/scrape" = "true"
-      "cloud.google.com/neg" = "{}"
+      "cloud.google.com/neg" = "{\"exposed_ports\":{\"8443\":{}}}"
     }
     labels = {
       "app"           = "autoneg"
@@ -290,13 +297,36 @@ resource "kubernetes_deployment" "deployment_autoneg_controller_manager" {
           run_as_non_root = true
         }
 
+        affinity {
+          pod_anti_affinity {
+            preferred_during_scheduling_ignored_during_execution {
+              weight = 100
+              pod_affinity_term {
+                label_selector {
+                  match_expressions {
+                    key      = "app"
+                    operator = "In"
+                    values   = ["autoneg"]
+                  }
+                  match_expressions {
+                    key      = "control-plane"
+                    operator = "In"
+                    values   = ["controller-manager"]
+                  }
+                }
+                topology_key = "kubernetes.io/hostname"
+              }
+            }
+          }
+        }
+
         container {
           name = "manager"
 
           image             = var.controller_image
           image_pull_policy = var.image_pull_policy
 
-          args    = ["--health-probe-bind-address=:8081", "--metrics-bind-address=:8443", "--leader-elect", "--zap-encoder=json"]
+          args    = ["--health-probe-bind-address=:8081", "--metrics-bind-address=:8443", "--zap-encoder=json"]
           command = ["/manager"]
 
           security_context {
@@ -353,7 +383,7 @@ resource "kubernetes_deployment" "deployment_autoneg_controller_manager" {
   ]
 }
 
-resource "kubernetes_pod_disruption_budget" "pdb_autoneg_controller" {
+resource "kubernetes_pod_disruption_budget_v1" "pdb_autoneg_controller" {
   count = var.pod_disruption_budget.enabled ? 1 : 0
 
   metadata {

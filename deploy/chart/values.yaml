@@ -18,7 +18,23 @@ autoscaling: {}
 #  minReplicas: 1
 #  maxReplicas: 10
 
-replicas: 1
+replicas: 2
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - autoneg
+              - key: control-plane
+                operator: In
+                values:
+                  - controller-manager
+          topologyKey: kubernetes.io/hostname
 
 # Pod Disruption Budget configuration
 podDisruptionBudget:
@@ -28,10 +44,36 @@ podDisruptionBudget:
   minAvailable: 1
   # maxUnavailable: 1
 
+# Pod Monitoring configuration for managed collection
+podMonitoring:
+  enabled: true
+  port: 8443
+
 serviceAccount:
   create: true
   name: autoneg-controller-manager
   annotations: {}
+  automountServiceAccountToken: true
+
+volumes: []
+#  - name: service-account-token
+#    projected:
+#      defaultMode: 420
+#      sources:
+#        - serviceAccountToken:
+#            expirationSeconds: 3600
+#            path: token
+#        - configMap:
+#            items:
+#            - key: ca.crt
+#              path: ca.crt
+#            name: kube-root-ca.crt
+#        - downwardAPI:
+#            items:
+#            - fieldRef:
+#                apiVersion: v1
+#                fieldPath: metadata.namespace
+#              path: namespace
 
 nodeSelector:
   iam.gke.io/gke-metadata-server-enabled: "true"
@@ -59,7 +101,6 @@ gke_autoneg_controller:
   args:
     - --health-probe-bind-address=:8081
     - --metrics-bind-address=:8443
-    - --leader-elect
     - --zap-encoder=json
   securityContext:
     allowPrivilegeEscalation: false
@@ -92,3 +133,7 @@ gke_autoneg_controller:
     requests:
       cpu: 100m
       memory: 20Mi
+  #volumeMounts:
+  #  - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+  #    name: service-account-token
+  #    readOnly: true

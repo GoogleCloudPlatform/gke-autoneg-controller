@@ -62,19 +62,13 @@ variable "custom_role_add_random_suffix" {
 variable "controller_image" {
   type        = string
   description = "Autoneg controller container image"
-  default     = "ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:v1.4.3"
+  default     = "ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:v2.0.0"
 }
 
 variable "image_pull_policy" {
   type        = string
   description = "Image pull policy for Autoneg container"
   default     = "IfNotPresent"
-}
-
-variable "kube_rbac_proxy_image" {
-  type        = string
-  description = "kuber-rbac-proxy container image"
-  default     = "gcr.io/kubebuilder/kube-rbac-proxy:v0.16.0"
 }
 
 variable "namespace" {
@@ -92,7 +86,7 @@ variable "priority_class_name" {
 variable "replicas" {
   type        = number
   description = "Number of replicas for the deployment"
-  default     = 1
+  default     = 2
 }
 
 variable "pod_disruption_budget" {
@@ -103,6 +97,8 @@ variable "pod_disruption_budget" {
   })
   description = "Pod Disruption Budget configuration"
   default = {
-    enabled = false
+    enabled         = true
+    min_available   = 1
+    max_unavailable = null
   }
 }
