@@ -59,7 +59,7 @@ testenv:
 	$(call go-get-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest@latest)
 
 test: manifests generate fmt vet testenv ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell ${ENVTEST} use ${ENVTEST_K8S_VERSION} --bin-dir ${ENVTEST_ASSETS_DIR} -p path)" go test ./... -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell ${ENVTEST} use ${ENVTEST_K8S_VERSION} --bin-dir ${ENVTEST_ASSETS_DIR} -p path)" go test -v ./... -coverprofile cover.out
 
 ##@ Build
 

@@ -329,6 +329,16 @@ resource "kubernetes_deployment" "deployment_autoneg_controller_manager" {
           args    = ["--health-probe-bind-address=:8081", "--metrics-bind-address=:8443", "--zap-encoder=json"]
           command = ["/manager"]
 
+          port {
+            container_port = 8081
+            name           = "health"
+          }
+
+          port {
+            container_port = 8443
+            name           = "metrics"
+          }
+
           security_context {
             allow_privilege_escalation = false
             privileged                 = false

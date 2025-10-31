@@ -13,19 +13,10 @@ spec:
       {{- include "autoneg.selectorLabels" . | nindent 6 }}
   endpoints:
   - port: {{ .Values.podMonitoring.port }}
+    scheme: {{ .Values.podMonitoring.scheme }}
+{{- if .Values.podMonitoring.insecureSkipVerify }}
+    tls:
+      insecureSkipVerify: true
+{{- end }}
     interval: 30s
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: gmp-system:collector:autoneg-metrics-reader
-  labels: {{- include "autoneg.labels" . | nindent 4 }}
-roleRef:
-  name: autoneg-metrics-reader
-  kind: ClusterRole
-  apiGroup: rbac.authorization.k8s.io
-subjects:
-- name: collector
-  namespace: gke-gmp-system
-  kind: ServiceAccount
 {{- end }}

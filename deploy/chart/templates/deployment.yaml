@@ -80,6 +80,9 @@ spec:
             {{- toYaml .Values.gke_autoneg_controller.securityContext | nindent 12 }}
           args:
             {{- toYaml .Values.gke_autoneg_controller.args | nindent 12 }}
+            {{- if .Values.podMonitoring.enabled }}
+            - --metrics-authorization=false
+            {{- end }}
           command:
             {{- toYaml .Values.gke_autoneg_controller.command | nindent 12 }}
           {{- if .Values.gke_autoneg_controller.livenessProbe }}
@@ -94,6 +97,8 @@ spec:
             {{- toYaml .Values.gke_autoneg_controller.resources | nindent 12 }}
           volumeMounts:
             {{- toYaml .Values.gke_autoneg_controller.volumeMounts | nindent 12 }}
+          ports:
+            {{- toYaml .Values.gke_autoneg_controller.ports | nindent 12 }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

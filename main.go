@@ -78,7 +78,9 @@ func main() {
 	var useSvcNeg bool
 	var deregisterNEGsOnAnnotationRemoval bool
 	var debug bool
+	var useAuthorizationForMetrics bool
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
+	flag.BoolVar(&useAuthorizationForMetrics, "metrics-authorization", true, "Enforce authorization for metrics endpoint")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.Float64Var(&maxRatePerEndpointDefault, "max-rate-per-endpoint", 0, "Default max rate per endpoint. Can be overridden by user config.")
 	flag.Float64Var(&maxConnectionsPerEndpointDefault, "max-connections-per-endpoint", 0, "Default max connections per endpoint. Can be overridden by user config.")
@@ -153,10 +155,12 @@ func main() {
 	}
 
 	metricsServerOptions := metricsserver.Options{
-		BindAddress:    metricsAddr,
-		SecureServing:  true,
-		TLSOpts:        []func(*tls.Config){disableHTTP2},
-		FilterProvider: filters.WithAuthenticationAndAuthorization,
+		BindAddress:   metricsAddr,
+		SecureServing: true,
+		TLSOpts:       []func(*tls.Config){disableHTTP2},
+	}
+	if useAuthorizationForMetrics {
+		metricsServerOptions.FilterProvider = filters.WithAuthenticationAndAuthorization
 	}
 
 	mgrOpts := ctrl.Options{
@@ -184,7 +188,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controllers.ServiceReconciler{
+	serviceReconciler := &controllers.ServiceReconciler{
 		Client:                            mgr.GetClient(),
 		Scheme:                            mgr.GetScheme(),
 		BackendController:                 controllers.NewBackendController(project, s),
@@ -197,7 +201,9 @@ func main() {
 		DeregisterNEGsOnAnnotationRemoval: deregisterNEGsOnAnnotationRemoval,
 		ReconcileDuration:                 &reconcileDuration,
 		UseSvcNeg:                         useSvcNeg,
-	}).SetupWithManager(mgr); err != nil {
+	}
+	serviceReconciler.RegisterMetrics()
+	if err = serviceReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Service")
 		os.Exit(1)
 	}
