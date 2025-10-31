@@ -48,4 +48,5 @@ module "kubernetes" {
   priority_class_name   = var.priority_class_name
   replicas              = var.replicas
   pod_disruption_budget = var.pod_disruption_budget
+  autopilot             = var.autopilot
 }
