@@ -256,6 +256,7 @@ resource "kubernetes_service" "service_autoneg_controller_manager_metrics_servic
 }
 
 resource "kubernetes_deployment" "deployment_autoneg_controller_manager" {
+  count = (var.autopilot) ? 0 : 1
   metadata {
     namespace = kubernetes_namespace.namespace_autoneg_system.metadata[0].name
     name      = "autoneg-controller-manager"
@@ -263,7 +264,134 @@ resource "kubernetes_deployment" "deployment_autoneg_controller_manager" {
       "app"           = "autoneg"
       "control-plane" = "controller-manager"
     }
-    annotations = {}
+  }
+
+  spec {
+    replicas = var.replicas
+    selector {
+      match_labels = {
+        app           = "autoneg"
+        control-plane = "controller-manager"
+      }
+    }
+
+    template {
+      metadata {
+        labels = {
+          app           = "autoneg"
+          control-plane = "controller-manager"
+        }
+        annotations = {}
+      }
+
+      spec {
+        service_account_name             = kubernetes_service_account.service_account.metadata[0].name
+        automount_service_account_token  = true
+        termination_grace_period_seconds = 10
+        priority_class_name              = var.priority_class_name
+        node_selector = {
+          "iam.gke.io/gke-metadata-server-enabled" = "true"
+        }
+
+        security_context {
+          run_as_non_root = true
+        }
+
+        affinity {
+          pod_anti_affinity {
+            preferred_during_scheduling_ignored_during_execution {
+              weight = 100
+              pod_affinity_term {
+                label_selector {
+                  match_expressions {
+                    key      = "app"
+                    operator = "In"
+                    values   = ["autoneg"]
+                  }
+                  match_expressions {
+                    key      = "control-plane"
+                    operator = "In"
+                    values   = ["controller-manager"]
+                  }
+                }
+                topology_key = "kubernetes.io/hostname"
+              }
+            }
+          }
+        }
+
+        container {
+          name = "manager"
+
+          image             = var.controller_image
+          image_pull_policy = var.image_pull_policy
+
+          args    = ["--health-probe-bind-address=:8081", "--metrics-bind-address=:8443", "--zap-encoder=json"]
+          command = ["/manager"]
+
+          security_context {
+            allow_privilege_escalation = false
+            privileged                 = false
+            capabilities {
+              drop = ["ALL"]
+            }
+            read_only_root_filesystem = true
+            run_as_non_root           = true
+            run_as_user               = 65532
+            run_as_group              = 65532
+            seccomp_profile {
+              type = "RuntimeDefault"
+            }
+          }
+
+          liveness_probe {
+            http_get {
+              path = "/healthz"
+              port = 8081
+            }
+            initial_delay_seconds = 15
+            period_seconds        = 20
+          }
+
+          readiness_probe {
+            http_get {
+              path = "/readyz"
+              port = 8081
+            }
+            initial_delay_seconds = 5
+            period_seconds        = 10
+          }
+
+          resources {
+            limits = {
+              cpu    = "100m"
+              memory = "30Mi"
+            }
+            requests = {
+              cpu    = "100m"
+              memory = "20Mi"
+            }
+          }
+        }
+      }
+    }
+  }
+  depends_on = [
+    kubernetes_role_binding.rolebinding_autoneg_leader_election_rolebinding,
+    kubernetes_cluster_role_binding.clusterrolebinding_autoneg_manager_rolebinding,
+    kubernetes_cluster_role_binding.clusterrolebinding_autoneg_proxy_rolebinding,
+  ]
+}
+
+resource "kubernetes_deployment" "deployment_autoneg_controller_manager_autopilot" {
+  count = (var.autopilot) ? 1 : 0
+  metadata {
+    namespace = kubernetes_namespace.namespace_autoneg_system.metadata[0].name
+    name      = "autoneg-controller-manager"
+    labels = {
+      "app"           = "autoneg"
+      "control-plane" = "controller-manager"
+    }
   }
 
   spec {
