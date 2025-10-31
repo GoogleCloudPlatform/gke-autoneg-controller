@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -32,7 +33,10 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	"github.com/go-logr/logr"
 )
 
 type BackendController interface {
@@ -53,6 +57,9 @@ type ServiceReconciler struct {
 	ReconcileDuration                 *time.Duration
 	DeregisterNEGsOnAnnotationRemoval bool
 	UseSvcNeg                         bool
+
+	MetricBackendServicesPerService *prometheus.GaugeVec
+	MetricNEGsPerService            *prometheus.GaugeVec
 }
 
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;update;patch
@@ -116,6 +123,9 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	logger.Info("Existing status", "status", fmt.Sprintf("%+v", status))
 	if status.syncConfig != nil {
 		intendedStatus.AutonegSyncConfig = status.syncConfig
+	}
+	if err = r.RecordMetrics(logger, svc.ObjectMeta.Namespace, svc.ObjectMeta.Name, status); err != nil {
+		logger.Error(err, "Error recording metrics")
 	}
 
 	if deleting {
@@ -190,6 +200,50 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	return r.reconcileResult(nil)
+}
+
+func (r *ServiceReconciler) RegisterMetrics() {
+	r.MetricBackendServicesPerService = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "backend_services_per_service",
+			Help: "Number of backends services per service",
+		},
+		[]string{"namespace", "service", "port"},
+	)
+
+	r.MetricNEGsPerService = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "network_endpoint_groups_per_service",
+			Help: "Number of NEGs per service",
+		},
+		[]string{"namespace", "service"},
+	)
+	metrics.Registry.MustRegister(r.MetricBackendServicesPerService, r.MetricNEGsPerService)
+}
+
+func (r *ServiceReconciler) RecordMetrics(logger logr.Logger, namespace string, service string, status Statuses) error {
+	// Add metrics if they are set up
+	if r.MetricBackendServicesPerService != nil {
+		for mk, mv := range status.status.BackendServices {
+			metricLabels := prometheus.Labels{
+				"namespace": namespace,
+				"service":   service,
+				"port":      mk,
+			}
+			(*r.MetricBackendServicesPerService).With(metricLabels).Set(float64(len(mv)))
+		}
+	}
+	if r.MetricNEGsPerService != nil {
+		metricLabels := prometheus.Labels{
+			"namespace": namespace,
+			"service":   service,
+		}
+		(*r.MetricNEGsPerService).With(metricLabels).Set(float64(len(status.negStatus.NEGs)))
+	}
+	if r.MetricBackendServicesPerService != nil || r.MetricNEGsPerService != nil {
+		return nil
+	}
+	return errors.New("no metrics configured")
 }
 
 // SetupWithManager sets up the controller with the Manager.

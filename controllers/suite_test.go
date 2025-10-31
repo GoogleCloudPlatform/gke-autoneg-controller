@@ -82,7 +82,7 @@ var _ = BeforeSuite(func() {
 	backendController = &TestBackendController{Counter: 0}
 	duration := 1 * time.Second
 
-	err = (&ServiceReconciler{
+	sr := &ServiceReconciler{
 		Client:              k8sManager.GetClient(),
 		BackendController:   backendController,
 		Recorder:            k8sManager.GetEventRecorderFor("autoneg-controller"),
@@ -90,7 +90,9 @@ var _ = BeforeSuite(func() {
 		AllowServiceName:    true,
 		AlwaysReconcile:     true,
 		ReconcileDuration:   &duration,
-	}).SetupWithManager(k8sManager)
+	}
+	sr.RegisterMetrics()
+	err = sr.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
 	go func() {

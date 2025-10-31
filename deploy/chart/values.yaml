@@ -45,9 +45,12 @@ podDisruptionBudget:
   # maxUnavailable: 1
 
 # Pod Monitoring configuration for managed collection
+# Enabling Pod Monitoring disables authorization on the metrics endpoint
 podMonitoring:
   enabled: true
-  port: 8443
+  port: metrics
+  scheme: https
+  insecureSkipVerify: true
 
 serviceAccount:
   create: true
@@ -133,6 +136,11 @@ gke_autoneg_controller:
     requests:
       cpu: 100m
       memory: 20Mi
+  ports:
+    - containerPort: 8081
+      name: health
+    - containerPort: 8443
+      name: metrics
   #volumeMounts:
   #  - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
   #    name: service-account-token
