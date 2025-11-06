@@ -509,6 +509,14 @@ resource "kubernetes_deployment" "deployment_autoneg_controller_manager_autopilo
     kubernetes_cluster_role_binding.clusterrolebinding_autoneg_manager_rolebinding,
     kubernetes_cluster_role_binding.clusterrolebinding_autoneg_proxy_rolebinding,
   ]
+  lifecycle {
+    ignore_changes = [
+      metadata[0].annotations,
+      spec[0].template[0].spec[0].container[0].resources,
+      spec[0].template[0].spec[0].security_context[0].seccomp_profile,
+      spec[0].template[0].spec[0].toleration,
+    ]
+  }
 }
 
 resource "kubernetes_pod_disruption_budget_v1" "pdb_autoneg_controller" {
