@@ -256,7 +256,7 @@ resource "kubernetes_service" "service_autoneg_controller_manager_metrics_servic
 }
 
 resource "kubernetes_deployment" "deployment_autoneg_controller_manager" {
-  count = (var.autopilot) ? 0 : 1
+  for_each = toset(var.autopilot ? [] : [""])
   metadata {
     namespace = kubernetes_namespace.namespace_autoneg_system.metadata[0].name
     name      = "autoneg-controller-manager"
@@ -384,7 +384,8 @@ resource "kubernetes_deployment" "deployment_autoneg_controller_manager" {
 }
 
 resource "kubernetes_deployment" "deployment_autoneg_controller_manager_autopilot" {
-  count = (var.autopilot) ? 1 : 0
+  for_each = toset(var.autopilot ? [""] : [])
+
   metadata {
     namespace = kubernetes_namespace.namespace_autoneg_system.metadata[0].name
     name      = "autoneg-controller-manager"
@@ -542,4 +543,9 @@ resource "kubernetes_pod_disruption_budget_v1" "pdb_autoneg_controller" {
       }
     }
   }
+}
+
+moved {
+  from = kubernetes_deployment.deployment_autoneg_controller_manager
+  to   = kubernetes_deployment.deployment_autoneg_controller_manager[""]
 }
