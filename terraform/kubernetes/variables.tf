@@ -100,3 +100,9 @@ variable "metrics_service" {
   type        = bool
   default     = false
 }
+
+variable "autopilot" {
+  description = "Whether the GKE cluster is Autopilot"
+  type        = bool
+  default     = false
+}

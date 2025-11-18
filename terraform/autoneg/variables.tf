@@ -102,3 +102,9 @@ variable "pod_disruption_budget" {
     max_unavailable = null
   }
 }
+
+variable "autopilot" {
+  description = "Whether the GKE cluster is Autopilot"
+  type        = bool
+  default     = false
+}
