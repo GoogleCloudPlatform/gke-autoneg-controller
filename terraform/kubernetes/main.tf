@@ -43,7 +43,7 @@ resource "kubernetes_service_account" "service_account" {
     }
 
     annotations = var.workload_identity != null ? {
-      "iam.gke.io/gcp-service-account" = format("%s@%s.iam.gserviceaccount.com", var.workload_identity.service_account, var.project_id)
+      "iam.gke.io/gcp-service-account" = format("%s@%s.iam.gserviceaccount.com", var.service_account_id, var.project_id)
     } : {}
   }
 }
