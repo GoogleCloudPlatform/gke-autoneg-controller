@@ -173,10 +173,12 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	if err = r.Update(ctx, svc); err != nil {
-		// Do not record an event in case of routine object conflict.
-		if !apierrors.IsConflict(err) {
-			r.Recorder.Event(svc, "Warning", "BackendError", err.Error())
+		if apierrors.IsConflict(err) {
+			// Treat object update races as transient and retry with the latest version.
+			logger.Info("Conflict updating service; requeueing", "error", err.Error())
+			return reconcile.Result{RequeueAfter: 1 * time.Second}, nil
 		}
+		r.Recorder.Event(svc, "Warning", "BackendError", err.Error())
 		return r.reconcileResult(err)
 	}
 
