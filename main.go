@@ -79,6 +79,8 @@ func main() {
 	var deregisterNEGsOnAnnotationRemoval bool
 	var debug bool
 	var useAuthorizationForMetrics bool
+	var leaderElectionLeaseDuration time.Duration
+	var leaderElectionRenewDeadline time.Duration
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&useAuthorizationForMetrics, "metrics-authorization", true, "Enforce authorization for metrics endpoint")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -88,6 +90,8 @@ func main() {
 	flag.BoolVar(&enableLeaderElection, "leader-elect", true,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+	flag.DurationVar(&leaderElectionLeaseDuration, "leader-elect-lease-duration", 30*time.Second, "Set leaser election lease duration (in seconds).")
+	flag.DurationVar(&leaderElectionRenewDeadline, "leader-elect-renew-deadline", 20*time.Second, "Set leaser election lease renewal deadline (in seconds).")
 	flag.StringVar(&serviceNameTemplate, "default-backendservice-name", "{name}-{port}",
 		"A naming template consists of {namespace}, {name}, {port} or {hash} separated by hyphens, "+
 			"where {hash} is the first 8 digits of a hash of other given information")
@@ -170,6 +174,8 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "9fe89c94.controller.autoneg.dev",
+		LeaseDuration:          &leaderElectionLeaseDuration,
+		RenewDeadline:          &leaderElectionRenewDeadline,
 		Logger:                 logger, // Ensure manager uses the same logger for leader election
 		NewCache: func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
 			if namespaces != "" {
