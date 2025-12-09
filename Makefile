@@ -59,7 +59,10 @@ testenv:
 	$(call go-get-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest@latest)
 
 test: manifests generate fmt vet testenv ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell ${ENVTEST} use ${ENVTEST_K8S_VERSION} --bin-dir ${ENVTEST_ASSETS_DIR} -p path)" go test -v ./... -coverprofile cover.out
+	# setu toolchain to workaround this https://github.com/golang/go/issues/75031
+	GOTOOLCHAIN=$(shell go env GOVERSION)+auto \
+	KUBEBUILDER_ASSETS="$(shell ${ENVTEST} use ${ENVTEST_K8S_VERSION} --bin-dir ${ENVTEST_ASSETS_DIR} -p path)" \
+	go test -v ./... -coverprofile cover.out
 
 ##@ Build
 
