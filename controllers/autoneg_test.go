@@ -18,15 +18,12 @@ package controllers
 
 import (
 	"context"
-	"encoding/json"
 	"maps"
 	"math"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"slices"
-	"strings"
-	"sync"
 	"testing"
 
 	"google.golang.org/api/option"
@@ -1110,89 +1107,11 @@ func TestReconcileBackendsDeletionWithEmptyNEGStatus(t *testing.T) {
 	}
 }
 
-type fakeBackendServiceHandler struct {
-	sync.RWMutex
-	bs             *compute.BackendService
-	t              *testing.T
-	expectedCalls  [][2]string
-	operations     map[string]bool
-	firstOpPending bool
-}
-
-func (h *fakeBackendServiceHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	h.t.Logf("Got request: %s %s %s", req.URL.Scheme, req.Method, req.URL.String())
-
-	parts := strings.Split(req.URL.Path, "/")
-	bsName := parts[len(parts)-1]
-	resType := parts[len(parts)-2]
-
-	h.t.Logf("Got backend service name: %s - resource type: %s", bsName, resType)
-
-	if h.expectedCalls != nil {
-		// check and fails if it is not as expected
-		expectedCall := h.expectedCalls[0]
-		if req.Method != expectedCall[0] || resType != expectedCall[1] {
-			h.t.Fatalf("unexpected API call: expected: %v, got %v", expectedCall, [2]string{req.Method, resType})
-			return
-		}
-		// pop the current one, expect the next
-		h.expectedCalls = h.expectedCalls[1:]
-	}
-
-	switch req.Method {
-	case http.MethodGet:
-		if bsName == h.bs.Name {
-			if resType == "operations" {
-				opStatus := computeOperationStatusDone
-				if h.firstOpPending {
-					if h.operations == nil {
-						h.operations = make(map[string]bool)
-					}
-					if !h.operations[bsName] {
-						opStatus = computeOperationStatusPending
-						h.operations[bsName] = true
-					}
-				}
-				json.NewEncoder(w).Encode(compute.Operation{Status: opStatus})
-				return
-			}
-			h.RLock()
-			defer h.RUnlock()
-			enc := json.NewEncoder(w)
-			if err := enc.Encode(h.bs); err != nil {
-				h.t.Fatalf("json encode failed: %v", err)
-			}
-			return
-		}
-
-	case http.MethodPatch:
-		defer req.Body.Close()
-		if bsName == h.bs.Name {
-			patchBody := compute.BackendService{}
-			dec := json.NewDecoder(req.Body)
-			if err := dec.Decode(&patchBody); err != nil {
-				h.t.Fatalf("json decode failed: %v", err)
-			}
-			h.Lock()
-			defer h.Unlock()
-			enc := json.NewEncoder(w)
-			if err := enc.Encode(h.bs); err != nil {
-				h.t.Fatalf("json encode failed: %v", err)
-			}
-			return
-		}
-
-	default:
-		h.t.Fatalf("unexpected %s api call", req.Method)
-	}
-	w.WriteHeader(http.StatusNotFound)
-}
-
 func TestReconcileBackendsWithCustomMetricsAgainstFakeServer(t *testing.T) {
 	project := "test-project"
 	negStatusOneZone := NEGStatus{
 		NEGs:  map[string]string{"80": "fake_neg"},
-		Zones: []string{"zone1", "zone2"},
+		Zones: []string{"zone1"},
 	}
 	as := AutonegStatus{
 		AutonegConfig: AutonegConfig{
@@ -1223,22 +1142,19 @@ func TestReconcileBackendsWithCustomMetricsAgainstFakeServer(t *testing.T) {
 	}
 
 	checkExpectedCallsAreDone := true
-	fbsh := &fakeBackendServiceHandler{
-		bs: &compute.BackendService{
+	fbss := newFakeBackendServiceServer(
+		map[string]*compute.BackendService{"fake": {
 			Kind:            "compute#backendService",
 			Id:              1,
 			Name:            "fake",
 			ForceSendFields: []string{"Backends"},
 			Backends:        []*compute.Backend{&ab},
-		},
-		t:              t,
-		expectedCalls:  [][2]string{{"GET", "backendServices"}, {"PATCH", "backendServices"}, {"GET", "operations"}, {"GET", "operations"}},
-		firstOpPending: true,
-	}
+		}},
+		map[string][][2]string{"fake": {{"GET", "backendServices"}, {"PATCH", "backendServices"}, {"GET", "operations"}, {"GET", "operations"}}},
+		map[string][]string{"fake": {computeOperationStatusPending, computeOperationStatusDone}},
+		t)
 
-	s := httptest.NewServer(fbsh)
-
-	cs, err := compute.NewService(t.Context(), option.WithEndpoint(s.URL), option.WithoutAuthentication())
+	cs, err := compute.NewService(t.Context(), option.WithEndpoint(fbss.URL), option.WithoutAuthentication())
 	if err != nil {
 		t.Fatalf("Failed to instantiate compute service: %v", err)
 	}
@@ -1253,9 +1169,15 @@ func TestReconcileBackendsWithCustomMetricsAgainstFakeServer(t *testing.T) {
 	}
 
 	if checkExpectedCallsAreDone {
-		if len(fbsh.expectedCalls) != 0 {
-			t.Fatalf("Some expected calls not done, remaining uncalled: %v", fbsh.expectedCalls)
+		if len(fbss.bsExpectedCalls["fake"]) != 0 {
+			t.Fatalf("Some expected calls not done, remaining uncalled: %v",
+				fbss.bsExpectedCalls["fake"])
 		}
+	}
+
+	if fbss.bss["fake"].Backends[0].BalancingMode != "CUSTOM_METRICS" {
+		t.Fatalf("Configured backend is not CUSTOM_METRICS balancing mode: %s",
+			fbss.bss["fake"].Backends[0].BalancingMode)
 	}
 }
 
