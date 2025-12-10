@@ -280,8 +280,7 @@ func (fbss *fakeBackendServiceServer) ServeHTTP(w http.ResponseWriter, r *http.R
 	var fatalf, logf func(format string, args ...any)
 	if fbss.t != nil {
 		fatalf = fbss.t.Fatalf
-		// logf = fbss.t.Logf
-		logf = func(format string, args ...any) { fmt.Printf(format, args...) }
+		logf = fbss.t.Logf
 	} else {
 		fatalf = func(format string, args ...any) {}
 		logf = func(format string, args ...any) { fmt.Printf(format, args...) }
@@ -370,9 +369,9 @@ func (fbss *fakeBackendServiceServer) ServeHTTP(w http.ResponseWriter, r *http.R
 			return
 		}
 
-		// var body strings.Builder
-		// json.NewEncoder(&body).Encode(patchBody)
-		// logf("ServeHTTP patch received: %+v\n%s\n", patchBody.Backends, body.String())
+		var body strings.Builder
+		json.NewEncoder(&body).Encode(patchBody)
+		logf("ServeHTTP patch received: %+v\n%s\n", patchBody.Backends, body.String())
 		bs.Backends = patchBody.Backends
 
 		if err := json.NewEncoder(w).Encode(bs); err != nil {
