@@ -18,10 +18,12 @@ package controllers
 
 import (
 	"context"
+	"maps"
 	"math"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"slices"
 	"testing"
 
 	"google.golang.org/api/option"
@@ -31,7 +33,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/ingress-gce/pkg/apis/svcneg/v1beta1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -42,6 +44,8 @@ var (
 	validMultiConfig      = `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":100},{"name":"http-ilb-be","max_rate_per_endpoint":100}],"443":[{"name":"https-be","max_connections_per_endpoint":1000},{"name":"https-ilb-be","max_connections_per_endpoint":1000}]}}`
 	validConfigWoName     = `{"backend_services":{"80":[{"max_rate_per_endpoint":100}],"443":[{"max_connections_per_endpoint":1000}]}}`
 	invalidCapacityConfig = `{"backend_services":{"443":[{"max_connections_per_endpoint":1000,"initial_capacity":500}]}}`
+	validWithCustomMetric = `{"backend_services":{"80":[{"name":"http-be","custom_metrics":[{"name": "orca.named_metrics.cool_one", "max_utilization": 0.8}]}]}}`
+	invalidCustomMetric   = `{"backend_services":{"80":[{"name":"http-be","custom_metrics":[{"name": "orca.named_metrics.cool_one", "max_utilization": 8.0}]}]}}`
 
 	validStatus        = `{}`
 	validAutonegConfig = `{}`
@@ -181,6 +185,22 @@ var statusTests = []struct {
 		},
 		true,
 		false,
+	},
+	{
+		"valid autoneg config with custom metrics",
+		map[string]string{
+			autonegAnnotation: validWithCustomMetric,
+		},
+		true,
+		false,
+	},
+	{
+		"invalid autoneg custom metric treshold",
+		map[string]string{
+			autonegAnnotation: invalidCustomMetric,
+		},
+		true,
+		true,
 	},
 }
 
@@ -361,12 +381,14 @@ func TestValidateNewConfig(t *testing.T) {
 		config                 AutonegConfig
 		err                    bool
 		expectedCapacityScaler float64
+		expectedBalancingMode  string
 	}{
 		{
 			name:                   "default config",
 			config:                 AutonegConfig{},
 			err:                    false,
 			expectedCapacityScaler: 1,
+			expectedBalancingMode:  "CONNECTION",
 		},
 		{
 			name: "negative initial_capacity",
@@ -376,13 +398,14 @@ func TestValidateNewConfig(t *testing.T) {
 						"http-be": {
 							Name:            "http-be",
 							Connections:     100,
-							InitialCapacity: pointer.Int32Ptr(int32(-10)),
+							InitialCapacity: ptr.To(int32(-10)),
 						},
 					},
 				},
 			},
 			err:                    true,
 			expectedCapacityScaler: 1,
+			expectedBalancingMode:  "CONNECTION",
 		},
 		{
 			name: "large initial capacity",
@@ -392,13 +415,14 @@ func TestValidateNewConfig(t *testing.T) {
 						"http-be": {
 							Name:            "http-be",
 							Connections:     100,
-							InitialCapacity: pointer.Int32Ptr(int32(5000)),
+							InitialCapacity: ptr.To(int32(5000)),
 						},
 					},
 				},
 			},
 			err:                    true,
 			expectedCapacityScaler: 1,
+			expectedBalancingMode:  "CONNECTION",
 		},
 		{
 			name: "zero initial capacity",
@@ -408,13 +432,14 @@ func TestValidateNewConfig(t *testing.T) {
 						"http-be": {
 							Name:            "http-be",
 							Connections:     100,
-							InitialCapacity: pointer.Int32Ptr(int32(0)),
+							InitialCapacity: ptr.To(int32(0)),
 						},
 					},
 				},
 			},
 			err:                    false,
 			expectedCapacityScaler: 0,
+			expectedBalancingMode:  "CONNECTION",
 		},
 		{
 			name: "half initial capacity",
@@ -424,13 +449,14 @@ func TestValidateNewConfig(t *testing.T) {
 						"http-be": {
 							Name:            "http-be",
 							Connections:     100,
-							InitialCapacity: pointer.Int32Ptr(int32(50)),
+							InitialCapacity: ptr.To(int32(50)),
 						},
 					},
 				},
 			},
 			err:                    false,
 			expectedCapacityScaler: 0.5,
+			expectedBalancingMode:  "CONNECTION",
 		},
 		{
 			name: "max initial capacity",
@@ -440,13 +466,14 @@ func TestValidateNewConfig(t *testing.T) {
 						"http-be": {
 							Name:            "http-be",
 							Rate:            100,
-							InitialCapacity: pointer.Int32Ptr(int32(100)),
+							InitialCapacity: ptr.To(int32(100)),
 						},
 					},
 				},
 			},
 			err:                    false,
 			expectedCapacityScaler: 1,
+			expectedBalancingMode:  "RATE",
 		},
 		{
 			name: "updated capacity",
@@ -456,14 +483,117 @@ func TestValidateNewConfig(t *testing.T) {
 						"http-be": {
 							Name:            "http-be",
 							Rate:            100,
-							InitialCapacity: pointer.Int32Ptr(int32(10)),
-							CapacityScaler:  pointer.Int32Ptr(int32(42)),
+							InitialCapacity: ptr.To(int32(10)),
+							CapacityScaler:  ptr.To(int32(42)),
 						},
 					},
 				},
 			},
 			err:                    false,
 			expectedCapacityScaler: 0.42,
+			expectedBalancingMode:  "RATE",
+		},
+		{
+			name: "single custom metric",
+			config: AutonegConfig{
+				BackendServices: map[string]map[string]AutonegNEGConfig{
+					"80": {
+						"http-be": {
+							Name: "http-be",
+							CustomMetrics: []AutonegCustomMetric{
+								{
+									Name:           "cool_one",
+									MaxUtilization: 0.5,
+								},
+							},
+							InitialCapacity: ptr.To(int32(10)),
+							CapacityScaler:  ptr.To(int32(42)),
+						},
+					},
+				},
+			},
+			err:                    false,
+			expectedCapacityScaler: 0.42,
+			expectedBalancingMode:  "CUSTOM_METRICS",
+		},
+		{
+			name: "three custom metrics with dry run",
+			config: AutonegConfig{
+				BackendServices: map[string]map[string]AutonegNEGConfig{
+					"80": {
+						"http-be": {
+							Name: "http-be",
+							CustomMetrics: []AutonegCustomMetric{
+								{
+									DryRun:         true,
+									Name:           "cool_1",
+									MaxUtilization: 0.5,
+								},
+								{
+									DryRun:         true,
+									Name:           "cool_2",
+									MaxUtilization: 0.5,
+								},
+								{
+									DryRun:         true,
+									Name:           "cool_3",
+									MaxUtilization: 0.5,
+								},
+							},
+							InitialCapacity: ptr.To(int32(10)),
+							CapacityScaler:  ptr.To(int32(42)),
+						},
+					},
+				},
+			},
+			err:                    false,
+			expectedCapacityScaler: 0.42,
+			expectedBalancingMode:  "CUSTOM_METRICS",
+		},
+		{
+			name: "too many custom metrics without dry run",
+			config: AutonegConfig{
+				BackendServices: map[string]map[string]AutonegNEGConfig{
+					"80": {
+						"http-be": {
+							Name: "http-be",
+							CustomMetrics: []AutonegCustomMetric{
+								{Name: "cool_1"},
+								{DryRun: true, Name: "cool_2"},
+								{DryRun: true, Name: "cool_3"},
+							},
+							InitialCapacity: ptr.To(int32(10)),
+							CapacityScaler:  ptr.To(int32(42)),
+						},
+					},
+				},
+			},
+			err:                    true,
+			expectedCapacityScaler: 0.42,
+			expectedBalancingMode:  "CUSTOM_METRICS",
+		},
+		{
+			name: "too many custom metrics",
+			config: AutonegConfig{
+				BackendServices: map[string]map[string]AutonegNEGConfig{
+					"80": {
+						"http-be": {
+							Name: "http-be",
+							CustomMetrics: []AutonegCustomMetric{
+								{Name: "cool_1"},
+								{Name: "cool_2"},
+								{Name: "cool_3"},
+								{Name: "cool_4"},
+							},
+							InitialCapacity: ptr.To(int32(10)),
+							CapacityScaler:  ptr.To(int32(42)),
+						},
+					},
+				},
+			},
+			err:                    true,
+			expectedCapacityScaler: 0.42,
+			expectedBalancingMode:  "CUSTOM_METRICS",
 		},
 	}
 
@@ -488,6 +618,10 @@ func TestValidateNewConfig(t *testing.T) {
 		if diff := math.Abs(beConfig.CapacityScaler - ct.expectedCapacityScaler); diff > 1e-9 {
 			t.Errorf("Set %q: expected CapacityScaler of %f, got %f (diff %f)", ct.name, ct.expectedCapacityScaler, beConfig.CapacityScaler, diff)
 		}
+
+		if beConfig.BalancingMode != ct.expectedBalancingMode {
+			t.Errorf("Set %q: expected balacing mode %q, got: %q", ct.name, ct.expectedBalancingMode, beConfig.BalancingMode)
+		}
 	}
 }
 
@@ -496,6 +630,18 @@ func relevantCopy(a compute.Backend) compute.Backend {
 	b.Group = a.Group
 	b.MaxRatePerEndpoint = a.MaxRatePerEndpoint
 	b.MaxConnectionsPerEndpoint = a.MaxConnectionsPerEndpoint
+	if len(a.CustomMetrics) > 0 {
+		b.CustomMetrics = slices.Collect(func(yield func(*compute.BackendCustomMetric) bool) {
+			for _, acm := range a.CustomMetrics {
+				bcm := *acm
+				bcm.ForceSendFields = slices.Collect(slices.Values(acm.ForceSendFields))
+				bcm.NullFields = slices.Collect(slices.Values(acm.NullFields))
+				if !yield(&bcm) {
+					return
+				}
+			}
+		})
+	}
 	return b
 }
 
@@ -542,6 +688,14 @@ var (
 	configBasicPort80Backend = map[string]map[string]AutonegNEGConfig{"80": configBasicPort80Slice}
 	configBasic              = AutonegConfig{BackendServices: configBasicPort80Backend}
 
+	// custom metric state
+	configCustomMetricPort80 = AutonegNEGConfig{Name: "test", CustomMetrics: []AutonegCustomMetric{
+		{Name: "cool_one", MaxUtilization: 0.8}, {Name: "cool_two", MaxUtilization: 0.6},
+	}}
+	configCMPort80Slice   = map[string]AutonegNEGConfig{"test": configCustomMetricPort80}
+	configCMPort80Backend = map[string]map[string]AutonegNEGConfig{"80": configCMPort80Slice}
+	configCustomMetric    = AutonegConfig{BackendServices: configCMPort80Backend}
+
 	statusBasicWithNEGs = AutonegStatus{
 		AutonegConfig: configBasic,
 		NEGStatus:     negStatus,
@@ -550,9 +704,24 @@ var (
 		AutonegConfig: configBasic,
 		NEGStatus:     NEGStatus{},
 	}
-	backendsBasicWithNEGs = map[string]map[string]Backends{"80": map[string]Backends{"test": Backends{name: "test", backends: []compute.Backend{
+
+	statusCMWithNEGs = AutonegStatus{
+		AutonegConfig: configCustomMetric,
+		NEGStatus:     negStatus,
+	}
+	statusCMWithEmptyNEGs = AutonegStatus{
+		AutonegConfig: configCustomMetric,
+		NEGStatus:     NEGStatus{},
+	}
+
+	backendsBasicWithNEGs = map[string]map[string]Backends{"80": {"test": {name: "test", backends: []compute.Backend{
 		statusBasicWithNEGs.Backend("test", "80", getGroup(fakeProject, "zone1", fakeNeg)),
 		statusBasicWithNEGs.Backend("test", "80", getGroup(fakeProject, "zone2", fakeNeg)),
+	}}}}
+
+	backendsCMWithNEGs = map[string]map[string]Backends{"80": {"test": {name: "test", backends: []compute.Backend{
+		statusCMWithNEGs.Backend("test", "80", getGroup(fakeProject, "zone1", fakeNeg)),
+		statusCMWithNEGs.Backend("test", "80", getGroup(fakeProject, "zone2", fakeNeg)),
 	}}}}
 
 	// value changed state
@@ -564,14 +733,14 @@ var (
 		AutonegConfig: configValueChange,
 		NEGStatus:     negStatus,
 	}
-	backendsValueChangeWithNEGs = map[string]map[string]Backends{"80": map[string]Backends{"test": Backends{name: "test", backends: []compute.Backend{
+	backendsValueChangeWithNEGs = map[string]map[string]Backends{"80": {"test": {name: "test", backends: []compute.Backend{
 		statusValueChangeWithNEGs.Backend("test", "80", getGroup(fakeProject, "zone1", fakeNeg)),
 		statusValueChangeWithNEGs.Backend("test", "80", getGroup(fakeProject, "zone2", fakeNeg)),
 	}}}}
 
 	// named changed state
 	configNameChangePort80        = AutonegNEGConfig{Name: "changed", Rate: 100}
-	configNameChangePort80Slice   = map[string]AutonegNEGConfig{"changed": configValueChangePort80}
+	configNameChangePort80Slice   = map[string]AutonegNEGConfig{"changed": configNameChangePort80}
 	configNameChangePort80Backend = map[string]map[string]AutonegNEGConfig{"80": configNameChangePort80Slice}
 	configNameChange              = AutonegConfig{BackendServices: configNameChangePort80Backend}
 	statusNameChangeWithNEGs      = AutonegStatus{
@@ -727,14 +896,71 @@ var reconcileTests = []struct {
 		backendsBasicWithNEGs,
 		backendsEmpty,
 	},
+	{
+		"custom metric to empty config",
+		statusCMWithNEGs,
+		statusEmpty,
+		backendsCMWithNEGs,
+		backendsEmpty,
+	},
+	{
+		"empty config to custom metric",
+		statusEmpty,
+		statusCMWithNEGs,
+		backendsEmpty,
+		backendsCMWithNEGs,
+	},
+	{
+		"custom metric to basic",
+		statusCMWithNEGs,
+		statusBasicWithNEGs,
+		backendsNone,
+		backendsBasicWithNEGs,
+	},
+	{
+		"basic to custom metric",
+		statusBasicWithNEGs,
+		statusCMWithNEGs,
+		backendsNone,
+		backendsCMWithNEGs,
+	},
 
-	// {
-	// 	"basic to name changed",
-	// 	statusBasicWithNEGs,
-	// 	statusNameChangeWithNEGs,
-	// 	backendsBasicWithNEGs,
-	// 	backendsNameChangeWithNEGs,
-	// },
+	// ReconcileStatus will leave the removed/replaced status as a backend service with zero backend,
+	// tweak the expected results accordingly.
+	// Such zero backends BackendService is managed in the API caller to reset or deleting the BackendService
+	{
+		"basic to name changed",
+		statusBasicWithNEGs,
+		statusNameChangeWithNEGs,
+
+		// backendsBasicWithNEGs, // plus an empty backends named changed
+		map[string]map[string]Backends{"80": maps.Collect(func(yield func(string, Backends) bool) {
+			for k, v := range backendsBasicWithNEGs["80"] {
+				if !yield(k, v) {
+					return
+				}
+			}
+			for k := range backendsNameChangeWithNEGs["80"] {
+				if !yield(k, Backends{name: k}) {
+					return
+				}
+			}
+		})},
+
+		// backendsNameChangeWithNEGs, // plus an empty backends named test
+		map[string]map[string]Backends{"80": maps.Collect(func(yield func(string, Backends) bool) {
+			for k, v := range backendsNameChangeWithNEGs["80"] {
+				if !yield(k, v) {
+					return
+				}
+			}
+			for k := range backendsBasicWithNEGs["80"] {
+				if !yield(k, Backends{name: k}) {
+					return
+				}
+			}
+		})},
+	},
 }
 
 func TestReconcileStatuses(t *testing.T) {
@@ -878,6 +1104,80 @@ func TestReconcileBackendsDeletionWithEmptyNEGStatus(t *testing.T) {
 	}, false)
 	if err != nil {
 		t.Errorf("ReconcileBackends() got err: %v, want none", err)
+	}
+}
+
+func TestReconcileBackendsWithCustomMetricsAgainstFakeServer(t *testing.T) {
+	project := "test-project"
+	negStatusOneZone := NEGStatus{
+		NEGs:  map[string]string{"80": "fake_neg"},
+		Zones: []string{"zone1"},
+	}
+	as := AutonegStatus{
+		AutonegConfig: AutonegConfig{
+			BackendServices: map[string]map[string]AutonegNEGConfig{
+				"80": {
+					"fake": AutonegNEGConfig{Name: "fake", Connections: 100},
+				},
+			},
+		},
+		NEGStatus: negStatusOneZone, // NEG status not populated by GKE NEG controller.
+	}
+	ab := as.Backend("fake", "80", getGroup(project, negStatusOneZone.Zones[0], negStatusOneZone.NEGs["80"]))
+
+	is := AutonegStatus{
+		AutonegConfig: AutonegConfig{
+			BackendServices: map[string]map[string]AutonegNEGConfig{
+				"80": {
+					"fake": AutonegNEGConfig{
+						Name: "fake",
+						CustomMetrics: []AutonegCustomMetric{
+							{Name: "orca.named_metrics.cool_one", MaxUtilization: 0.8},
+						},
+					},
+				},
+			},
+		},
+		NEGStatus: negStatusOneZone, // NEG status not populated by GKE NEG controller.
+	}
+
+	checkExpectedCallsAreDone := true
+	fbss := newFakeBackendServiceServer(
+		map[string]*compute.BackendService{"fake": {
+			Kind:            "compute#backendService",
+			Id:              1,
+			Name:            "fake",
+			ForceSendFields: []string{"Backends"},
+			Backends:        []*compute.Backend{&ab},
+		}},
+		map[string][][2]string{"fake": {{"GET", "backendServices"}, {"PATCH", "backendServices"}, {"GET", "operations"}, {"GET", "operations"}}},
+		map[string][]string{"fake": {computeOperationStatusPending, computeOperationStatusDone}},
+		t)
+
+	cs, err := compute.NewService(t.Context(), option.WithEndpoint(fbss.URL), option.WithoutAuthentication())
+	if err != nil {
+		t.Fatalf("Failed to instantiate compute service: %v", err)
+	}
+	bc := ProdBackendController{
+		project: project,
+		s:       cs,
+	}
+
+	err = bc.ReconcileBackends(context.Background(), as, is, false)
+	if err != nil {
+		t.Errorf("ReconcileBackends() got err: %v, want none", err)
+	}
+
+	if checkExpectedCallsAreDone {
+		if len(fbss.bsExpectedCalls["fake"]) != 0 {
+			t.Fatalf("Some expected calls not done, remaining uncalled: %v",
+				fbss.bsExpectedCalls["fake"])
+		}
+	}
+
+	if fbss.bss["fake"].Backends[0].BalancingMode != "CUSTOM_METRICS" {
+		t.Fatalf("Configured backend is not CUSTOM_METRICS balancing mode: %s",
+			fbss.bss["fake"].Backends[0].BalancingMode)
 	}
 }
 

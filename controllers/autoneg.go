@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"sort"
@@ -63,6 +64,17 @@ func (e *errNotFound) Error() string {
 	return "backend service not found"
 }
 
+// BackendCustomMetric return a compute.BackendCustomMetric pointer
+func (acm AutonegCustomMetric) BackendCustomMetric() *compute.BackendCustomMetric {
+	var bcm = compute.BackendCustomMetric{
+		DryRun:          acm.DryRun,
+		MaxUtilization:  acm.MaxUtilization,
+		Name:            acm.Name,
+		ForceSendFields: []string{"DryRun", "MaxUtilization"},
+	}
+	return &bcm
+}
+
 // Backend returns a compute.Backend struct specified with a backend group
 // and the embedded AutonegConfig
 func (s AutonegStatus) Backend(name string, port string, group string) compute.Backend {
@@ -87,8 +99,21 @@ func (s AutonegStatus) Backend(name string, port string, group string) compute.B
 		}
 	}
 
-	// Prefer the rate balancing mode if set
-	if cfg.Rate > 0 {
+	// Prefer the custom_metrics balancing mode if set, then prefer rate balancing mode if set
+	if len(cfg.CustomMetrics) > 0 {
+		return compute.Backend{
+			Group:         group,
+			BalancingMode: "CUSTOM_METRICS",
+			CustomMetrics: slices.Collect(func(yield func(*compute.BackendCustomMetric) bool) {
+				for _, cm := range cfg.CustomMetrics {
+					if !yield(cm.BackendCustomMetric()) {
+						return
+					}
+				}
+			}),
+			CapacityScaler: capacityScaler,
+		}
+	} else if cfg.Rate > 0 {
 		return compute.Backend{
 			Group:              group,
 			BalancingMode:      "RATE",
@@ -160,6 +185,10 @@ func (b *ProdBackendController) updateBackends(ctx context.Context, name string,
 		for beidx, be := range svc.Backends {
 			if fc, ok := forceCapacity[beidx]; ok && fc {
 				be.ForceSendFields = []string{"CapacityScaler"}
+			}
+			if len(be.CustomMetrics) == 0 {
+				be.ForceSendFields = append(be.ForceSendFields, "CustomMetrics")
+				be.NullFields = append(be.NullFields, "CustomMetrics")
 			}
 		}
 	}
@@ -245,7 +274,7 @@ func (b *ProdBackendController) ReconcileBackends(ctx context.Context, actual, i
 	removes, upserts := ReconcileStatus(logger, b.project, actual, intended)
 	logger.Info("Reconciling backends", "removes", fmt.Sprintf("%+v", removes), "upserts", fmt.Sprintf("%+v", upserts))
 
-	var forceCapacity map[int]bool = make(map[int]bool, 0)
+	var forceCapacity = make(map[int]bool, 0)
 	// Iterate over each port that has backends to be removed.
 	for port, _removes := range removes {
 		// Iterate over each backend service to be removed.
@@ -306,10 +335,29 @@ func (b *ProdBackendController) ReconcileBackends(ctx context.Context, actual, i
 				for _, be := range newSvc.Backends {
 					if u.Group == be.Group {
 						// TODO: copy fields explicitly
+						be.BalancingMode = u.BalancingMode
 						be.MaxRatePerEndpoint = u.MaxRatePerEndpoint
 						be.MaxConnectionsPerEndpoint = u.MaxConnectionsPerEndpoint
+						if len(u.CustomMetrics) > 0 {
+							// deep copy it
+							be.CustomMetrics = slices.Collect(func(yield func(*compute.BackendCustomMetric) bool) {
+								for bcm := range slices.Values(u.CustomMetrics) {
+									acm := AutonegCustomMetric{
+										Name:           bcm.Name,
+										DryRun:         bcm.DryRun,
+										MaxUtilization: bcm.MaxUtilization,
+									}
+									if !yield(acm.BackendCustomMetric()) {
+										return
+									}
+								}
+							})
+						} else {
+							be.CustomMetrics = nil
+						}
+
 						if intended.AutonegSyncConfig != nil {
-							var syncConfig AutonegSyncConfig = *intended.AutonegSyncConfig
+							var syncConfig = *intended.AutonegSyncConfig
 							if syncConfig.CapacityScaler != nil && *syncConfig.CapacityScaler {
 								be.CapacityScaler = u.CapacityScaler
 							}
@@ -385,10 +433,7 @@ func ReconcileStatus(logger logr.Logger, project string, actual AutonegStatus, i
 	}
 
 	// actualBE and intendedBE is a list of NEGs per port now
-	var intendedBEKeys []string
-	for k := range intendedBE {
-		intendedBEKeys = append(intendedBEKeys, k)
-	}
+	intendedBEKeys := slices.Collect(maps.Keys(intendedBE))
 	sort.Strings(intendedBEKeys)
 
 	for _, port := range intendedBEKeys {
@@ -399,10 +444,7 @@ func ReconcileStatus(logger logr.Logger, project string, actual AutonegStatus, i
 		for bname, be := range intended.BackendServices[port] {
 			upsert := Backends{name: be.Name, region: be.Region}
 
-			var groupsKeys []string
-			for k := range groups {
-				groupsKeys = append(groupsKeys, k)
-			}
+			groupsKeys := slices.Collect(maps.Keys(groups))
 			sort.Strings(groupsKeys)
 
 			for _, i := range groupsKeys {
@@ -465,7 +507,7 @@ func ReconcileStatus(logger logr.Logger, project string, actual AutonegStatus, i
 	}
 
 	// see if some configs were removed entirely
-	for port, _ := range actual.BackendServices {
+	for port := range actual.BackendServices {
 		if _, ok := intended.BackendServices[port]; !ok {
 			if _, ok = removes[port]; !ok {
 				removes[port] = make(map[string]Backends, len(actualBE))
@@ -498,14 +540,26 @@ func validateConfig(config AutonegConfig) error {
 					return fmt.Errorf("initial_capacity for backend %q must be between 0 and 100 inclusive, but was %q; see https://cloud.google.com/load-balancing/docs/backend-service#capacity_scaler for details", cfg.Name, *cfg.InitialCapacity)
 				}
 			}
-		}
-	}
 
-	for _, cfgs := range config.BackendServices {
-		for _, cfg := range cfgs {
 			if cfg.CapacityScaler != nil {
 				if *cfg.CapacityScaler < 0 || *cfg.CapacityScaler > 100 {
 					return fmt.Errorf("capacity_scaler for backend %q must be between 0 and 100 inclusive, but was %q; see https://cloud.google.com/load-balancing/docs/backend-service#capacity_scaler for details", cfg.Name, *cfg.CapacityScaler)
+				}
+			}
+
+			if len(cfg.CustomMetrics) > 0 {
+				if len(cfg.CustomMetrics) > 3 {
+					return fmt.Errorf("too many custom_metrics for backend %q must be at most 3, but was %q; see https://docs.cloud.google.com/load-balancing/docs/https/applb-custom-metrics#metrics-limits-requirements for details", cfg.Name, len(cfg.CustomMetrics))
+				}
+				hasDryRun := true
+				for _, cm := range cfg.CustomMetrics {
+					hasDryRun = hasDryRun && cm.DryRun
+					if cm.MaxUtilization < 0 || cm.MaxUtilization > 1 {
+						return fmt.Errorf("threshold in custom_metric (%q) for backend %q must be between 0.0 and 1.0 inclusive, but was %g; see https://docs.cloud.google.com/load-balancing/docs/backend-service#custom_metrics_balancing_mode for details", cm.Name, cfg.Name, cm.MaxUtilization)
+					}
+				}
+				if !hasDryRun && len(cfg.CustomMetrics) > 2 {
+					return fmt.Errorf("too many custom_metrics for backend %q must be at most 2, but was %q; see https://docs.cloud.google.com/load-balancing/docs/https/applb-custom-metrics#metrics-limits-requirements for details", cfg.Name, len(cfg.CustomMetrics))
 				}
 			}
 		}
