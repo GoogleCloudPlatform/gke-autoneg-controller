@@ -18,10 +18,12 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"math"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 
 	"google.golang.org/api/option"
@@ -878,6 +880,66 @@ func TestReconcileBackendsDeletionWithEmptyNEGStatus(t *testing.T) {
 	}, false)
 	if err != nil {
 		t.Errorf("ReconcileBackends() got err: %v, want none", err)
+	}
+}
+
+func TestReconcileBackendsRemovesOrphanedBackends(t *testing.T) {
+	updateCalled := false
+	s := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		res.Header().Set("Content-Type", "application/json")
+
+		if req.Method == "GET" && strings.Contains(req.URL.Path, "operations") {
+			json.NewEncoder(res).Encode(compute.Operation{Status: "DONE"})
+			return
+		}
+
+		if req.Method == "GET" {
+			json.NewEncoder(res).Encode(compute.BackendService{
+				Name:     "http-be",
+				Backends: []*compute.Backend{{Group: "https://www.googleapis.com/compute/v1/projects/test-project/zones/zone1/networkEndpointGroups/neg1"}},
+				SelfLink: "https://www.googleapis.com/compute/v1/projects/test-project/global/backendServices/http-be",
+			})
+			return
+		}
+
+		if req.Method == "PATCH" {
+			updateCalled = true
+			var body compute.BackendService
+			json.NewDecoder(req.Body).Decode(&body)
+			if len(body.Backends) != 0 {
+				t.Errorf("Expected PATCH to have 0 backends, got %d", len(body.Backends))
+			}
+			json.NewEncoder(res).Encode(compute.Operation{Name: "op-123", Status: "RUNNING"})
+			return
+		}
+	}))
+	defer s.Close()
+
+	cs, err := compute.NewService(context.Background(), option.WithEndpoint(s.URL), option.WithoutAuthentication())
+	if err != nil {
+		t.Fatalf("Failed to instantiate compute service: %v", err)
+	}
+
+	bc := ProdBackendController{project: "test-project", s: cs}
+	negStatus := NEGStatus{NEGs: map[string]string{"80": "neg1"}, Zones: []string{"zone1"}}
+
+	err = bc.ReconcileBackends(context.Background(),
+		AutonegStatus{
+			AutonegConfig: AutonegConfig{BackendServices: map[string]map[string]AutonegNEGConfig{"80": {"http-be": {Name: "http-be", Rate: 100}}}},
+			NEGStatus:     negStatus,
+		},
+		AutonegStatus{
+			AutonegConfig: AutonegConfig{BackendServices: map[string]map[string]AutonegNEGConfig{"80": {}}},
+			NEGStatus:     negStatus,
+		},
+		false,
+	)
+
+	if err != nil {
+		t.Errorf("ReconcileBackends() got err: %v, want none", err)
+	}
+	if !updateCalled {
+		t.Errorf("ReconcileBackends() did not trigger a GCP Update API call.")
 	}
 }
 
