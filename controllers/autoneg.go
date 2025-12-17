@@ -294,7 +294,7 @@ func (b *ProdBackendController) ReconcileBackends(ctx context.Context, actual, i
 
 			// If a different service needs to be updated based on the upsert map entry for this port,
 			// then save the existing backend service and update the new service.
-			if svcUpdated && (deleting || upsert.name == "" || upsert.name != remove.name) {
+			if svcUpdated && (deleting || upsert.name == "" || upsert.name != remove.name || len(upsert.backends) == 0) {
 				if err = b.updateBackends(ctx, remove.name, remove.region, oldSvc, forceCapacity, deleting); err != nil {
 					return
 				}
