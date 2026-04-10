@@ -1166,6 +1166,8 @@ func TestReconcileBackendsRemovesOrphanedBackends(t *testing.T) {
 	}
 	if !updateCalled {
 		t.Errorf("ReconcileBackends() did not trigger a GCP Update API call.")
+}
+
 func TestReconcileBackendsWithCustomMetricsAgainstFakeServer(t *testing.T) {
 	project := "test-project"
 	negStatusOneZone := NEGStatus{
@@ -1239,7 +1241,7 @@ func TestReconcileBackendsWithCustomMetricsAgainstFakeServer(t *testing.T) {
 			fbss.bss["fake"].Backends[0].BalancingMode)
 	}
 }
-
+	
 type fakeReader struct {
 	client.Reader
 	svcNeg *v1beta1.ServiceNetworkEndpointGroup
