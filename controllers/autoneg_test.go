@@ -48,6 +48,7 @@ var (
 	invalidCapacityConfig = `{"backend_services":{"443":[{"max_connections_per_endpoint":1000,"initial_capacity":500}]}}`
 	validWithCustomMetric = `{"backend_services":{"80":[{"name":"http-be","custom_metrics":[{"name": "orca.named_metrics.cool_one", "max_utilization": 0.8}]}]}}`
 	invalidCustomMetric   = `{"backend_services":{"80":[{"name":"http-be","custom_metrics":[{"name": "orca.named_metrics.cool_one", "max_utilization": 8.0}]}]}}`
+	validStringConfig     = `{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":"100","initial_capacity":"100"}],"443":[{"name":"https-be","max_connections_per_endpoint":1000,"initial_capacity":0}]}}`
 
 	validStatus        = `{}`
 	validAutonegConfig = `{}`
@@ -94,6 +95,14 @@ var statusTests = []struct {
 		"valid autoneg",
 		map[string]string{
 			autonegAnnotation: validConfig,
+		},
+		true,
+		false,
+	},
+	{
+		"valid autoneg with string config",
+		map[string]string{
+			autonegAnnotation: validStringConfig,
 		},
 		true,
 		false,
@@ -400,7 +409,7 @@ func TestValidateNewConfig(t *testing.T) {
 						"http-be": {
 							Name:            "http-be",
 							Connections:     100,
-							InitialCapacity: ptr.To(int32(-10)),
+							InitialCapacity: ptr.To(StringOrInt(-10)),
 						},
 					},
 				},
@@ -417,7 +426,7 @@ func TestValidateNewConfig(t *testing.T) {
 						"http-be": {
 							Name:            "http-be",
 							Connections:     100,
-							InitialCapacity: ptr.To(int32(5000)),
+							InitialCapacity: ptr.To(StringOrInt(5000)),
 						},
 					},
 				},
@@ -434,7 +443,7 @@ func TestValidateNewConfig(t *testing.T) {
 						"http-be": {
 							Name:            "http-be",
 							Connections:     100,
-							InitialCapacity: ptr.To(int32(0)),
+							InitialCapacity: ptr.To(StringOrInt(0)),
 						},
 					},
 				},
@@ -451,7 +460,7 @@ func TestValidateNewConfig(t *testing.T) {
 						"http-be": {
 							Name:            "http-be",
 							Connections:     100,
-							InitialCapacity: ptr.To(int32(50)),
+							InitialCapacity: ptr.To(StringOrInt(50)),
 						},
 					},
 				},
@@ -468,7 +477,7 @@ func TestValidateNewConfig(t *testing.T) {
 						"http-be": {
 							Name:            "http-be",
 							Rate:            100,
-							InitialCapacity: ptr.To(int32(100)),
+							InitialCapacity: ptr.To(StringOrInt(100)),
 						},
 					},
 				},
@@ -485,8 +494,8 @@ func TestValidateNewConfig(t *testing.T) {
 						"http-be": {
 							Name:            "http-be",
 							Rate:            100,
-							InitialCapacity: ptr.To(int32(10)),
-							CapacityScaler:  ptr.To(int32(42)),
+							InitialCapacity: ptr.To(StringOrInt(10)),
+							CapacityScaler:  ptr.To(StringOrInt(42)),
 						},
 					},
 				},
@@ -508,8 +517,8 @@ func TestValidateNewConfig(t *testing.T) {
 									MaxUtilization: 0.5,
 								},
 							},
-							InitialCapacity: ptr.To(int32(10)),
-							CapacityScaler:  ptr.To(int32(42)),
+							InitialCapacity: ptr.To(StringOrInt(10)),
+							CapacityScaler:  ptr.To(StringOrInt(42)),
 						},
 					},
 				},
@@ -542,8 +551,8 @@ func TestValidateNewConfig(t *testing.T) {
 									MaxUtilization: 0.5,
 								},
 							},
-							InitialCapacity: ptr.To(int32(10)),
-							CapacityScaler:  ptr.To(int32(42)),
+							InitialCapacity: ptr.To(StringOrInt(10)),
+							CapacityScaler:  ptr.To(StringOrInt(42)),
 						},
 					},
 				},
@@ -564,8 +573,8 @@ func TestValidateNewConfig(t *testing.T) {
 								{DryRun: true, Name: "cool_2"},
 								{DryRun: true, Name: "cool_3"},
 							},
-							InitialCapacity: ptr.To(int32(10)),
-							CapacityScaler:  ptr.To(int32(42)),
+							InitialCapacity: ptr.To(StringOrInt(10)),
+							CapacityScaler:  ptr.To(StringOrInt(42)),
 						},
 					},
 				},
@@ -587,8 +596,8 @@ func TestValidateNewConfig(t *testing.T) {
 								{Name: "cool_3"},
 								{Name: "cool_4"},
 							},
-							InitialCapacity: ptr.To(int32(10)),
-							CapacityScaler:  ptr.To(int32(42)),
+							InitialCapacity: ptr.To(StringOrInt(10)),
+							CapacityScaler:  ptr.To(StringOrInt(42)),
 						},
 					},
 				},
