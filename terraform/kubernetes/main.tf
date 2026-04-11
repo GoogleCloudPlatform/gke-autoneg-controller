@@ -23,7 +23,7 @@ terraform {
   }
 }
 
-resource "kubernetes_namespace" "namespace_autoneg_system" {
+resource "kubernetes_namespace_v1" "namespace_autoneg_system" {
   metadata {
     labels = {
       app           = "autoneg"
@@ -34,9 +34,9 @@ resource "kubernetes_namespace" "namespace_autoneg_system" {
   }
 }
 
-resource "kubernetes_service_account" "service_account" {
+resource "kubernetes_service_account_v1" "service_account" {
   metadata {
-    namespace = kubernetes_namespace.namespace_autoneg_system.metadata[0].name
+    namespace = kubernetes_namespace_v1.namespace_autoneg_system.metadata[0].name
     name      = var.workload_identity != null ? var.workload_identity.service_account : var.service_account_id
     labels = {
       app = "autoneg"
@@ -48,9 +48,9 @@ resource "kubernetes_service_account" "service_account" {
   }
 }
 
-resource "kubernetes_role" "role_autoneg_leader_election_role" {
+resource "kubernetes_role_v1" "role_autoneg_leader_election_role" {
   metadata {
-    namespace = kubernetes_namespace.namespace_autoneg_system.metadata[0].name
+    namespace = kubernetes_namespace_v1.namespace_autoneg_system.metadata[0].name
     name      = "autoneg-leader-election-role"
     labels = {
       app = "autoneg"
@@ -77,7 +77,7 @@ resource "kubernetes_role" "role_autoneg_leader_election_role" {
   }
 }
 
-resource "kubernetes_cluster_role" "clusterrole_autoneg_manager_role" {
+resource "kubernetes_cluster_role_v1" "clusterrole_autoneg_manager_role" {
   metadata {
     name = "autoneg-manager-role"
 
@@ -117,7 +117,7 @@ resource "kubernetes_cluster_role" "clusterrole_autoneg_manager_role" {
   }
 }
 
-resource "kubernetes_cluster_role" "clusterrole_autoneg_metrics_reader" {
+resource "kubernetes_cluster_role_v1" "clusterrole_autoneg_metrics_reader" {
   metadata {
     name = "autoneg-metrics-reader"
 
@@ -132,7 +132,7 @@ resource "kubernetes_cluster_role" "clusterrole_autoneg_metrics_reader" {
   }
 }
 
-resource "kubernetes_cluster_role" "clusterrole_autoneg_proxy_role" {
+resource "kubernetes_cluster_role_v1" "clusterrole_autoneg_proxy_role" {
   metadata {
     name = "autoneg-proxy-role"
 
@@ -155,9 +155,9 @@ resource "kubernetes_cluster_role" "clusterrole_autoneg_proxy_role" {
   }
 }
 
-resource "kubernetes_role_binding" "rolebinding_autoneg_leader_election_rolebinding" {
+resource "kubernetes_role_binding_v1" "rolebinding_autoneg_leader_election_rolebinding" {
   metadata {
-    namespace = kubernetes_namespace.namespace_autoneg_system.metadata[0].name
+    namespace = kubernetes_namespace_v1.namespace_autoneg_system.metadata[0].name
     name      = "autoneg-leader-election-rolebinding"
 
     labels = {
@@ -169,16 +169,16 @@ resource "kubernetes_role_binding" "rolebinding_autoneg_leader_election_rolebind
   role_ref {
     api_group = "rbac.authorization.k8s.io"
     kind      = "Role"
-    name      = kubernetes_role.role_autoneg_leader_election_role.metadata[0].name
+    name      = kubernetes_role_v1.role_autoneg_leader_election_role.metadata[0].name
   }
   subject {
     kind      = "ServiceAccount"
-    name      = kubernetes_service_account.service_account.metadata[0].name
-    namespace = kubernetes_namespace.namespace_autoneg_system.metadata[0].name
+    name      = kubernetes_service_account_v1.service_account.metadata[0].name
+    namespace = kubernetes_namespace_v1.namespace_autoneg_system.metadata[0].name
   }
 }
 
-resource "kubernetes_cluster_role_binding" "clusterrolebinding_autoneg_manager_rolebinding" {
+resource "kubernetes_cluster_role_binding_v1" "clusterrolebinding_autoneg_manager_rolebinding" {
   metadata {
     name = "autoneg-manager-rolebinding"
     labels = {
@@ -189,16 +189,16 @@ resource "kubernetes_cluster_role_binding" "clusterrolebinding_autoneg_manager_r
   role_ref {
     api_group = "rbac.authorization.k8s.io"
     kind      = "ClusterRole"
-    name      = kubernetes_cluster_role.clusterrole_autoneg_manager_role.metadata[0].name
+    name      = kubernetes_cluster_role_v1.clusterrole_autoneg_manager_role.metadata[0].name
   }
   subject {
     kind      = "ServiceAccount"
-    name      = kubernetes_service_account.service_account.metadata[0].name
-    namespace = kubernetes_namespace.namespace_autoneg_system.metadata[0].name
+    name      = kubernetes_service_account_v1.service_account.metadata[0].name
+    namespace = kubernetes_namespace_v1.namespace_autoneg_system.metadata[0].name
   }
 }
 
-resource "kubernetes_cluster_role_binding" "clusterrolebinding_autoneg_proxy_rolebinding" {
+resource "kubernetes_cluster_role_binding_v1" "clusterrolebinding_autoneg_proxy_rolebinding" {
   metadata {
     name = "autoneg-proxy-rolebinding"
     labels = {
@@ -209,16 +209,16 @@ resource "kubernetes_cluster_role_binding" "clusterrolebinding_autoneg_proxy_rol
   role_ref {
     api_group = "rbac.authorization.k8s.io"
     kind      = "ClusterRole"
-    name      = kubernetes_cluster_role.clusterrole_autoneg_proxy_role.metadata[0].name
+    name      = kubernetes_cluster_role_v1.clusterrole_autoneg_proxy_role.metadata[0].name
   }
   subject {
     kind      = "ServiceAccount"
-    name      = kubernetes_service_account.service_account.metadata[0].name
-    namespace = kubernetes_namespace.namespace_autoneg_system.metadata[0].name
+    name      = kubernetes_service_account_v1.service_account.metadata[0].name
+    namespace = kubernetes_namespace_v1.namespace_autoneg_system.metadata[0].name
   }
 }
 
-resource "kubernetes_service" "service_autoneg_controller_manager_metrics_service" {
+resource "kubernetes_service_v1" "service_autoneg_controller_manager_metrics_service" {
   count = var.metrics_service ? 1 : 0
   metadata {
     annotations = {
@@ -232,7 +232,7 @@ resource "kubernetes_service" "service_autoneg_controller_manager_metrics_servic
       "control-plane" = "controller-manager"
     }
     name      = "autoneg-controller-manager-metrics-service"
-    namespace = kubernetes_namespace.namespace_autoneg_system.metadata[0].name
+    namespace = kubernetes_namespace_v1.namespace_autoneg_system.metadata[0].name
   }
   spec {
     type = "ClusterIP"
@@ -255,10 +255,10 @@ resource "kubernetes_service" "service_autoneg_controller_manager_metrics_servic
   }
 }
 
-resource "kubernetes_deployment" "deployment_autoneg_controller_manager" {
+resource "kubernetes_deployment_v1" "deployment_autoneg_controller_manager" {
   for_each = toset(var.autopilot ? [] : [""])
   metadata {
-    namespace = kubernetes_namespace.namespace_autoneg_system.metadata[0].name
+    namespace = kubernetes_namespace_v1.namespace_autoneg_system.metadata[0].name
     name      = "autoneg-controller-manager"
     labels = {
       "app"           = "autoneg"
@@ -285,7 +285,7 @@ resource "kubernetes_deployment" "deployment_autoneg_controller_manager" {
       }
 
       spec {
-        service_account_name             = kubernetes_service_account.service_account.metadata[0].name
+        service_account_name             = kubernetes_service_account_v1.service_account.metadata[0].name
         automount_service_account_token  = true
         termination_grace_period_seconds = 10
         priority_class_name              = var.priority_class_name
@@ -387,17 +387,17 @@ resource "kubernetes_deployment" "deployment_autoneg_controller_manager" {
     }
   }
   depends_on = [
-    kubernetes_role_binding.rolebinding_autoneg_leader_election_rolebinding,
-    kubernetes_cluster_role_binding.clusterrolebinding_autoneg_manager_rolebinding,
-    kubernetes_cluster_role_binding.clusterrolebinding_autoneg_proxy_rolebinding,
+    kubernetes_role_binding_v1.rolebinding_autoneg_leader_election_rolebinding,
+    kubernetes_cluster_role_binding_v1.clusterrolebinding_autoneg_manager_rolebinding,
+    kubernetes_cluster_role_binding_v1.clusterrolebinding_autoneg_proxy_rolebinding,
   ]
 }
 
-resource "kubernetes_deployment" "deployment_autoneg_controller_manager_autopilot" {
+resource "kubernetes_deployment_v1" "deployment_autoneg_controller_manager_autopilot" {
   for_each = toset(var.autopilot ? [""] : [])
 
   metadata {
-    namespace = kubernetes_namespace.namespace_autoneg_system.metadata[0].name
+    namespace = kubernetes_namespace_v1.namespace_autoneg_system.metadata[0].name
     name      = "autoneg-controller-manager"
     labels = {
       "app"           = "autoneg"
@@ -424,7 +424,7 @@ resource "kubernetes_deployment" "deployment_autoneg_controller_manager_autopilo
       }
 
       spec {
-        service_account_name             = kubernetes_service_account.service_account.metadata[0].name
+        service_account_name             = kubernetes_service_account_v1.service_account.metadata[0].name
         automount_service_account_token  = true
         termination_grace_period_seconds = 10
         priority_class_name              = var.priority_class_name
@@ -516,9 +516,9 @@ resource "kubernetes_deployment" "deployment_autoneg_controller_manager_autopilo
     }
   }
   depends_on = [
-    kubernetes_role_binding.rolebinding_autoneg_leader_election_rolebinding,
-    kubernetes_cluster_role_binding.clusterrolebinding_autoneg_manager_rolebinding,
-    kubernetes_cluster_role_binding.clusterrolebinding_autoneg_proxy_rolebinding,
+    kubernetes_role_binding_v1.rolebinding_autoneg_leader_election_rolebinding,
+    kubernetes_cluster_role_binding_v1.clusterrolebinding_autoneg_manager_rolebinding,
+    kubernetes_cluster_role_binding_v1.clusterrolebinding_autoneg_proxy_rolebinding,
   ]
   lifecycle {
     ignore_changes = [
@@ -535,7 +535,7 @@ resource "kubernetes_pod_disruption_budget_v1" "pdb_autoneg_controller" {
 
   metadata {
     name      = "autoneg-controller-manager-pdb"
-    namespace = kubernetes_namespace.namespace_autoneg_system.metadata[0].name
+    namespace = kubernetes_namespace_v1.namespace_autoneg_system.metadata[0].name
     labels = {
       app           = "autoneg"
       control-plane = "controller-manager"
@@ -556,6 +556,6 @@ resource "kubernetes_pod_disruption_budget_v1" "pdb_autoneg_controller" {
 }
 
 moved {
-  from = kubernetes_deployment.deployment_autoneg_controller_manager
-  to   = kubernetes_deployment.deployment_autoneg_controller_manager[""]
+  from = kubernetes_deployment_v1.deployment_autoneg_controller_manager
+  to   = kubernetes_deployment_v1.deployment_autoneg_controller_manager[""]
 }
