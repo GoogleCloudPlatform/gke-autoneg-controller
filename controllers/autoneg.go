@@ -68,7 +68,7 @@ func (e *errNotFound) Error() string {
 func (acm AutonegCustomMetric) BackendCustomMetric() *compute.BackendCustomMetric {
 	var bcm = compute.BackendCustomMetric{
 		DryRun:          acm.DryRun,
-		MaxUtilization:  acm.MaxUtilization,
+		MaxUtilization:  float64(acm.MaxUtilization),
 		Name:            acm.Name,
 		ForceSendFields: []string{"DryRun", "MaxUtilization"},
 	}
@@ -117,7 +117,7 @@ func (s AutonegStatus) Backend(name string, port string, group string) compute.B
 		return compute.Backend{
 			Group:              group,
 			BalancingMode:      "RATE",
-			MaxRatePerEndpoint: cfg.Rate,
+			MaxRatePerEndpoint: float64(cfg.Rate),
 			CapacityScaler:     capacityScaler,
 		}
 	} else {
@@ -345,7 +345,7 @@ func (b *ProdBackendController) ReconcileBackends(ctx context.Context, actual, i
 									acm := AutonegCustomMetric{
 										Name:           bcm.Name,
 										DryRun:         bcm.DryRun,
-										MaxUtilization: bcm.MaxUtilization,
+										MaxUtilization: StringOrFloat(bcm.MaxUtilization),
 									}
 									if !yield(acm.BackendCustomMetric()) {
 										return
@@ -611,9 +611,9 @@ func getStatuses(ctx context.Context, namespace string, name string, annotations
 				//Use defaults if rate and connections have not been set
 				if cfg.Rate == 0 && cfg.Connections == 0 {
 					if r.MaxRatePerEndpointDefault > 0 {
-						cfg.Rate = r.MaxRatePerEndpointDefault
+						cfg.Rate = StringOrFloat(r.MaxRatePerEndpointDefault)
 					} else {
-						cfg.Connections = r.MaxConnectionsPerEndpointDefault
+						cfg.Connections = StringOrFloat(r.MaxConnectionsPerEndpointDefault)
 					}
 				}
 

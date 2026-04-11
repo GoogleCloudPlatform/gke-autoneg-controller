@@ -16,7 +16,11 @@ limitations under the License.
 
 package controllers
 
-import "google.golang.org/api/compute/v1"
+import (
+	"encoding/json"
+
+	"google.golang.org/api/compute/v1"
+)
 
 // NEGStatus specifies the output of the GKE NEG controller
 // stored in the cloud.google.com/neg-status annotation
@@ -35,6 +39,8 @@ type AutonegConfigTemp struct {
 	BackendServices map[string][]AutonegNEGConfig `json:"backend_services"`
 }
 
+type StringOrFloat float64
+
 // AutonegCustomMetric specifies the BackendCustomMetric for CUSTOM_METRICS balancing mode.
 type AutonegCustomMetric struct {
 	// DryRun: If true, the metric data is collected and reported to Cloud
@@ -43,7 +49,7 @@ type AutonegCustomMetric struct {
 	// MaxUtilization field on compute.BackendCustomMetric,
 	// define a target utilization for the Custom Metrics balancing mode.
 	// The valid range is [0.0, 1.0].
-	MaxUtilization float64 `json:"max_utilization,omitempty"`
+	MaxUtilization StringOrFloat `json:"max_utilization,omitempty"`
 	// Name: Name of a custom utilization signal. The name must be 1-64 characters
 	// long and match the regular expression a-z ([-_.a-z0-9]*[a-z0-9])? which
 	// means the first character must be a lowercase letter, and all following
@@ -61,8 +67,8 @@ type AutonegCustomMetric struct {
 type AutonegNEGConfig struct {
 	Name            string                `json:"name,omitempty"`
 	Region          string                `json:"region,omitempty"`
-	Rate            float64               `json:"max_rate_per_endpoint,omitempty"`
-	Connections     float64               `json:"max_connections_per_endpoint,omitempty"`
+	Rate            StringOrFloat         `json:"max_rate_per_endpoint,omitempty"`
+	Connections     StringOrFloat         `json:"max_connections_per_endpoint,omitempty"`
 	CustomMetrics   []AutonegCustomMetric `json:"custom_metrics,omitempty"`
 	InitialCapacity *int32                `json:"initial_capacity,omitempty"`
 	CapacityScaler  *int32                `json:"capacity_scaler,omitempty"`
@@ -107,4 +113,22 @@ type ProdBackendController struct {
 // in the cloud.google.com/neg annotation
 type NEGConfig struct {
 	ExposedPorts map[string]interface{} `json:"exposed_ports"`
+}
+
+func (sof *StringOrFloat) UnmarshalJSON(data []byte) error {
+	if string(data) == `""` {
+		if sof != nil {
+			*sof = 0
+		}
+		return nil
+	}
+
+	var f float64
+	err := json.Unmarshal(data, &f)
+	if err != nil {
+		return err
+	}
+	p := (*float64)(sof)
+	*p = f
+	return nil
 }
