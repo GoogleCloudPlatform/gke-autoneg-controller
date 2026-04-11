@@ -17,7 +17,8 @@ limitations under the License.
 package controllers
 
 import (
-	"encoding/json"
+	"strconv"
+	"strings"
 
 	"google.golang.org/api/compute/v1"
 )
@@ -40,6 +41,7 @@ type AutonegConfigTemp struct {
 }
 
 type StringOrFloat float64
+type StringOrInt int32
 
 // AutonegCustomMetric specifies the BackendCustomMetric for CUSTOM_METRICS balancing mode.
 type AutonegCustomMetric struct {
@@ -70,8 +72,8 @@ type AutonegNEGConfig struct {
 	Rate            StringOrFloat         `json:"max_rate_per_endpoint,omitempty"`
 	Connections     StringOrFloat         `json:"max_connections_per_endpoint,omitempty"`
 	CustomMetrics   []AutonegCustomMetric `json:"custom_metrics,omitempty"`
-	InitialCapacity *int32                `json:"initial_capacity,omitempty"`
-	CapacityScaler  *int32                `json:"capacity_scaler,omitempty"`
+	InitialCapacity *StringOrInt          `json:"initial_capacity,omitempty"`
+	CapacityScaler  *StringOrInt          `json:"capacity_scaler,omitempty"`
 }
 
 // AutonegSyncConfig specifies additional configuration which to sync
@@ -116,19 +118,33 @@ type NEGConfig struct {
 }
 
 func (sof *StringOrFloat) UnmarshalJSON(data []byte) error {
-	if string(data) == `""` {
+	if string(data) == "\"\"" {
 		if sof != nil {
 			*sof = 0
 		}
 		return nil
 	}
-
-	var f float64
-	err := json.Unmarshal(data, &f)
+	num := strings.ReplaceAll(string(data), "\"", "")
+	n, err := strconv.ParseFloat(num, 64)
 	if err != nil {
 		return err
 	}
-	p := (*float64)(sof)
-	*p = f
+	*sof = StringOrFloat(n)
+	return nil
+}
+
+func (sof *StringOrInt) UnmarshalJSON(data []byte) error {
+	if string(data) == "\"\"" {
+		if sof != nil {
+			*sof = 0
+		}
+		return nil
+	}
+	num := strings.ReplaceAll(string(data), "\"", "")
+	n, err := strconv.ParseInt(num, 10, 32)
+	if err != nil {
+		return err
+	}
+	*sof = StringOrInt(n)
 	return nil
 }

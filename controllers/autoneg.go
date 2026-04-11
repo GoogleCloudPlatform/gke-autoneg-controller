@@ -86,7 +86,7 @@ func (s AutonegStatus) Backend(name string, port string, group string) compute.B
 		// This case should not be possible since validateConfig checks
 		// it, but leave the default setting of 100% if capacity is less
 		// than 0 or greater than 100
-		if *capacity >= int32(0) && *capacity <= int32(100) {
+		if int32(*capacity) >= int32(0) && int32(*capacity) <= int32(100) {
 			capacityScaler = float64(*capacity) / 100
 		}
 	}
@@ -94,7 +94,7 @@ func (s AutonegStatus) Backend(name string, port string, group string) compute.B
 		// This case should not be possible since validateConfig checks
 		// it, but leave the default setting of 100% if capacity is less
 		// than 0 or greater than 100
-		if *capacity >= int32(0) && *capacity <= int32(100) {
+		if int32(*capacity) >= int32(0) && int32(*capacity) <= int32(100) {
 			capacityScaler = float64(*capacity) / 100
 		}
 	}
