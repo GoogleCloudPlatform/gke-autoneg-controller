@@ -81,6 +81,7 @@ func main() {
 	var useAuthorizationForMetrics bool
 	var leaderElectionLeaseDuration time.Duration
 	var leaderElectionRenewDeadline time.Duration
+	var maximumErrors int
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&useAuthorizationForMetrics, "metrics-authorization", true, "Enforce authorization for metrics endpoint")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -101,6 +102,7 @@ func main() {
 	flag.BoolVar(&deregisterNEGsOnAnnotationRemoval, "deregister-negs-on-annotation-removal", true, "Deregister NEGs from backend service when annotation removed.")
 	flag.StringVar(&project, "project-id", "", "The project ID of the Google Cloud project where the backend services are created. If not specified, project ID will be fetched from the Metadata server.")
 	flag.BoolVar(&useSvcNeg, "use-svcneg", true, "Use service neg custom resource to get the NEG zone info.")
+	flag.IntVar(&maximumErrors, "maximum-errors", 0, "Maximum consecutive errors in reconciliation, until controller gives up (0 means unlimited). Defaults to 0.")
 	flag.BoolVar(&debug, "debug", false, "Enable debug logging.")
 
 	opts := zap.Options{
@@ -207,6 +209,7 @@ func main() {
 		DeregisterNEGsOnAnnotationRemoval: deregisterNEGsOnAnnotationRemoval,
 		ReconcileDuration:                 &reconcileDuration,
 		UseSvcNeg:                         useSvcNeg,
+		MaxErrors:                         maximumErrors,
 	}
 	serviceReconciler.RegisterMetrics()
 	if err = serviceReconciler.SetupWithManager(mgr); err != nil {

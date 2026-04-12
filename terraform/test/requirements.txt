@@ -1,0 +1,7 @@
+kubernetes==35.0.0
+google-auth==2.49.2
+google-cloud-logging==3.15.0
+google-cloud-compute==1.47.0
+timelength==3.0.3
+pyOpenSSL==26.0.0
+termcolor==3.3.0

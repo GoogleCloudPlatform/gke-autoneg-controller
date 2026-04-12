@@ -93,6 +93,7 @@ The controller parameters can be customized via changing the [controller deploym
 * `--zap-log-level`: optional. Sets the logging level. Options: `debug`, `info`, `error`, or integer values for custom debug levels. The `debug` level shows detailed logs for GCP operations and Kubernetes reconciliation. Defaults to `info`.
 * `--zap-encoder`: optional. Sets the log output format. Options: `json`, `console`. Defaults to `json`.
 * `--zap-devel`: optional. Enables development mode with console encoder, debug level, and warn stack traces.
+* `--maximum-errors`. optional. Sets the maximum consecutive reconciliation failures until the controller gives up. Zero means no limit. Defaults to `0`.
 
 ## IAM considerations
 

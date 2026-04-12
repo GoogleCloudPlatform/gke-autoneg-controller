@@ -49,4 +49,5 @@ module "kubernetes" {
   replicas              = var.replicas
   pod_disruption_budget = var.pod_disruption_budget
   autopilot             = var.autopilot
+  manager_configuration = var.manager_configuration
 }
