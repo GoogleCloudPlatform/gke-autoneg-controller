@@ -326,7 +326,7 @@ resource "kubernetes_deployment_v1" "deployment_autoneg_controller_manager" {
           image             = var.controller_image
           image_pull_policy = var.image_pull_policy
 
-          args    = ["--health-probe-bind-address=:8081", "--metrics-bind-address=:8443", "--zap-encoder=json"]
+          args    = var.manager_configuration
           command = ["/manager"]
 
           port {
@@ -503,12 +503,12 @@ resource "kubernetes_deployment_v1" "deployment_autoneg_controller_manager_autop
 
           resources {
             limits = {
-              cpu    = "100m"
-              memory = "30Mi"
+              cpu    = var.autopilot ? "512m" : "100m" # Allow burstable class for Autopilot
+              memory = var.autopilot ? "158Mi" : "30Mi"
             }
             requests = {
               cpu    = "100m"
-              memory = "20Mi"
+              memory = var.autopilot ? "128Mi" : "20Mi"
             }
           }
         }

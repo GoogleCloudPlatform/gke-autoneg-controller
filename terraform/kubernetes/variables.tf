@@ -106,3 +106,9 @@ variable "autopilot" {
   type        = bool
   default     = false
 }
+
+variable "manager_configuration" {
+  description = "Container command line parameters"
+  type        = list(string)
+  default     = ["--health-probe-bind-address=:8081", "--metrics-bind-address=:8443", "--zap-encoder=json"]
+}

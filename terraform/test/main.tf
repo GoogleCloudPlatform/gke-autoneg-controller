@@ -167,13 +167,16 @@ module "cluster-primary" {
   }
 
   node_config = {
-    tags = ["autoneg-test"]
+    service_account = module.cluster-service-account.email
+    tags            = ["autoneg-test"]
   }
 
   enable_features = {
     dataplane_v2      = true
     workload_identity = true
   }
+
+  deletion_protection = false
 
   labels = {
     environment = "test"
@@ -203,15 +206,17 @@ module "cluster-secondary" {
     dns_access    = {}
   }
 
-
   node_config = {
-    tags = ["autoneg-test"]
+    service_account = module.cluster-service-account.email
+    tags            = ["autoneg-test"]
   }
 
   enable_features = {
     dataplane_v2      = true
     workload_identity = true
   }
+
+  deletion_protection = false
 
   labels = {
     environment = "test"
@@ -245,11 +250,12 @@ module "autoneg-primary" {
 
   source = "../autoneg"
 
-
   project_id                    = local.project_id
   service_account_id            = format("autoneg-primary%s", local.suffix)
   controller_image              = var.autoneg_image
   custom_role_add_random_suffix = local.suffix != "" ? true : false
+
+  manager_configuration = var.manager_configuration
 
   depends_on = [
     module.cluster-primary
@@ -269,6 +275,8 @@ module "autoneg-secondary" {
   service_account_id            = format("autoneg-secondary%s", local.suffix)
   controller_image              = var.autoneg_image
   custom_role_add_random_suffix = local.suffix != "" ? true : false
+
+  manager_configuration = var.manager_configuration
 
   depends_on = [
     module.cluster-secondary

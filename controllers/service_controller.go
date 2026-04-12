@@ -60,6 +60,9 @@ type ServiceReconciler struct {
 
 	MetricBackendServicesPerService *prometheus.GaugeVec
 	MetricNEGsPerService            *prometheus.GaugeVec
+
+	ErrorCount int
+	MaxErrors  int
 }
 
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;update;patch
@@ -89,11 +92,11 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		if apierrors.IsNotFound(err) {
 			// Object not found, return.
 			logger.V(1).Info("Service not found, skipping reconciliation")
-			return r.reconcileResult(nil)
+			return r.reconcileResult(logger, nil)
 		}
 		// Error reading thkube object - requeue the request.
 		logger.Error(err, "Failed to get Kubernetes service")
-		return r.reconcileResult(err)
+		return r.reconcileResult(logger, err)
 	}
 	logger.V(1).Info("Successfully retrieved Kubernetes service", "serviceType", svc.Spec.Type, "ports", len(svc.Spec.Ports))
 
@@ -101,12 +104,12 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Is this service using autoneg?
 	if !ok {
 		logger.V(1).Info("Service is not using autoneg, skipping")
-		return r.reconcileResult(nil)
+		return r.reconcileResult(logger, nil)
 	}
 	if err != nil {
 		logger.Error(err, "Configuration error for service")
 		r.Recorder.Event(svc, "Warning", "ConfigError", err.Error())
-		return r.reconcileResult(err)
+		return r.reconcileResult(logger, err)
 	}
 
 	deleting := false
@@ -132,7 +135,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		intendedStatus.BackendServices = make(map[string]map[string]AutonegNEGConfig, 0)
 	} else if reflect.DeepEqual(status.status, intendedStatus) && !r.AlwaysReconcile {
 		// Equal, no reconciliation necessary
-		return r.reconcileResult(nil)
+		return r.reconcileResult(logger, nil)
 	}
 
 	// Reconcile differences
@@ -141,12 +144,14 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if err = r.ReconcileBackends(ctx, status.status, intendedStatus, deleting); err != nil {
 		var e *errNotFound
 		if !(deleting && errors.As(err, &e)) {
+			logger.Info("BackendError when reconciling backends during normal operations", "service", svc, "error", err.Error())
 			r.Recorder.Event(svc, "Warning", "BackendError", err.Error())
-			return r.reconcileResult(err)
+			return r.reconcileResult(logger, err)
 		}
 		if deleting {
+			logger.Info("BackendError when reconciling backends during deletion", "service", svc, "error", err.Error())
 			r.Recorder.Event(svc, "Warning", "BackendError while deleting", err.Error())
-			return r.reconcileResult(err)
+			return r.reconcileResult(logger, err)
 		}
 	}
 
@@ -167,7 +172,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		anStatus, err := json.Marshal(intendedStatus)
 		if err != nil {
 			logger.Error(err, "json marshal error")
-			return r.reconcileResult(err)
+			return r.reconcileResult(logger, err)
 		}
 		svc.ObjectMeta.Annotations[autonegStatusAnnotation] = string(anStatus)
 	}
@@ -179,7 +184,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			return reconcile.Result{RequeueAfter: 1 * time.Second}, nil
 		}
 		r.Recorder.Event(svc, "Warning", "BackendError", err.Error())
-		return r.reconcileResult(err)
+		return r.reconcileResult(logger, err)
 	}
 
 	for port, endpointGroups := range intendedStatus.BackendServices {
@@ -201,7 +206,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 	}
 
-	return r.reconcileResult(nil)
+	return r.reconcileResult(logger, nil)
 }
 
 func (r *ServiceReconciler) RegisterMetrics() {
@@ -281,7 +286,17 @@ func removeString(slice []string, s string) (result []string) {
 	return
 }
 
-func (r *ServiceReconciler) reconcileResult(err error) (reconcile.Result, error) {
+func (r *ServiceReconciler) reconcileResult(logger logr.Logger, err error) (reconcile.Result, error) {
+	if err != nil {
+		r.ErrorCount++
+		if r.MaxErrors > 0 && r.ErrorCount > r.MaxErrors {
+			logger.Error(err, "Maximum error count exceeded.")
+			err = nil
+		}
+	}
+	if err == nil {
+		r.ErrorCount = 0
+	}
 	if r.ReconcileDuration != nil && r.AlwaysReconcile {
 		return reconcile.Result{RequeueAfter: *r.ReconcileDuration}, err
 	}
