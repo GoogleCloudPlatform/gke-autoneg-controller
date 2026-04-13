@@ -15,13 +15,15 @@
  */
 
 locals {
-  project_id                    = var.project_create ? module.project.project_id : var.project_id
-  suffix                        = var.add_suffix
-  ilb_name_primary              = format("autoneg-test-primary-ilb%s", local.suffix)
-  ilb_name_secondary            = format("autoneg-test-secondary-ilb%s", local.suffix)
-  xlb_name                      = format("autoneg-test-xlb%s", local.suffix)
-  ilb_backend_service_primary   = format("be%s", local.suffix)
-  ilb_backend_service_secondary = format("be%s", local.suffix)
+  project_id                        = var.project_create ? module.project.project_id : var.project_id
+  suffix                            = var.add_suffix
+  ilb_name_primary                  = format("autoneg-test-primary-ilb%s", local.suffix)
+  ilb_name_secondary                = format("autoneg-test-secondary-ilb%s", local.suffix)
+  xlb_name                          = format("autoneg-test-xlb%s", local.suffix)
+  ilb_backend_service_primary       = format("be%s", local.suffix)
+  ilb_backend_service_secondary     = format("be%s", local.suffix)
+  ilb_backend_alt_service_primary   = format("alt-be%s", local.suffix)
+  ilb_backend_alt_service_secondary = format("alt-be%s", local.suffix)
 
   xlb_backend_service = format("be%s", local.suffix)
 }
@@ -294,9 +296,25 @@ module "ilb-primary" {
     (local.ilb_backend_service_primary) = {
       backends = []
     }
+    (local.ilb_backend_alt_service_primary) = {
+      backends = []
+    }
   }
   urlmap_config = {
     default_service = local.ilb_backend_service_primary
+    host_rules = [{
+      hosts        = ["*"]
+      path_matcher = "pathmap"
+    }]
+    path_matchers = {
+      pathmap = {
+        default_service = local.ilb_backend_service_primary
+        path_rules = [{
+          paths   = ["/alt", "/alt/*"]
+          service = local.ilb_backend_alt_service_primary
+        }]
+      }
+    }
   }
 
   health_check_configs = {
@@ -325,9 +343,25 @@ module "ilb-secondary" {
     (local.ilb_backend_service_secondary) = {
       backends = []
     }
+    (local.ilb_backend_alt_service_secondary) = {
+      backends = []
+    }
   }
   urlmap_config = {
     default_service = local.ilb_backend_service_secondary
+    host_rules = [{
+      hosts        = ["*"]
+      path_matcher = "pathmap"
+    }]
+    path_matchers = {
+      pathmap = {
+        default_service = local.ilb_backend_service_secondary
+        path_rules = [{
+          paths   = ["/alt", "/alt/*"]
+          service = local.ilb_backend_alt_service_secondary
+        }]
+      }
+    }
   }
 
   health_check_configs = {
@@ -435,6 +469,10 @@ resource "kubernetes_service_v1" "hello-workload-primary" {
             name                  = format("%s-%s", local.ilb_name_primary, local.ilb_backend_service_primary)
             max_rate_per_endpoint = 100
             region                = var.region
+            }, {
+            name                  = format("%s-%s", local.ilb_name_primary, local.ilb_backend_alt_service_primary)
+            max_rate_per_endpoint = 50
+            region                = var.region
             }] : [], var.create_xlb == true ? [{
             name                  = format("%s-%s", local.xlb_name, local.xlb_backend_service)
             max_rate_per_endpoint = 100
@@ -523,6 +561,10 @@ resource "kubernetes_service_v1" "hello-workload-secondary" {
           "80" = concat(var.create_ilb == true ? [{
             name                  = format("%s-%s", local.ilb_name_secondary, local.ilb_backend_service_secondary)
             max_rate_per_endpoint = 100
+            region                = var.secondary_region
+            }, {
+            name                  = format("%s-%s", local.ilb_name_secondary, local.ilb_backend_alt_service_secondary)
+            max_rate_per_endpoint = 50
             region                = var.secondary_region
             }] : [], var.create_xlb == true ? [{
             name                  = format("%s-%s", local.xlb_name, local.xlb_backend_service)

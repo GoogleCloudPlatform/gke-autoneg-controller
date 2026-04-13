@@ -173,6 +173,35 @@ func (b *ProdBackendController) getBackendService(ctx context.Context, name stri
 
 }
 
+func (b *ProdBackendController) compareBackends(left compute.Backend, right compute.Backend) bool {
+	// We only compare values we set in Autoneg
+	if left.Group != right.Group {
+		return false
+	}
+	if left.BalancingMode != right.BalancingMode {
+		return false
+	}
+	if left.CapacityScaler != right.CapacityScaler {
+		return false
+	}
+	if left.MaxConnectionsPerEndpoint != right.MaxConnectionsPerEndpoint {
+		return false
+	}
+	if left.MaxRatePerEndpoint != right.MaxRatePerEndpoint {
+		return false
+	}
+	// Assume custom metrics are in the same order
+	if len(left.CustomMetrics) != len(right.CustomMetrics) {
+		return false
+	}
+	for lk := range left.CustomMetrics {
+		if left.CustomMetrics[lk] != right.CustomMetrics[lk] {
+			return false
+		}
+	}
+	return true
+}
+
 func (b *ProdBackendController) updateBackends(ctx context.Context, name string, region string, svc *compute.BackendService, forceCapacity map[int]bool, deleting bool) error {
 	logger := log.FromContext(ctx)
 	if len(svc.Backends) == 0 {
@@ -275,6 +304,7 @@ func (b *ProdBackendController) ReconcileBackends(ctx context.Context, actual, i
 	logger.Info("Reconciling backends", "removes", fmt.Sprintf("%+v", removes), "upserts", fmt.Sprintf("%+v", upserts))
 
 	var forceCapacity = make(map[int]bool, 0)
+	var currentBackends []compute.Backend
 	// Iterate over each port that has backends to be removed.
 	for port, _removes := range removes {
 		// Iterate over each backend service to be removed.
@@ -283,6 +313,7 @@ func (b *ProdBackendController) ReconcileBackends(ctx context.Context, actual, i
 			var svcUpdated = false
 			// Get the current state of the backend service.
 			oldSvc, err = b.getBackendService(ctx, remove.name, remove.region)
+
 			var e *errNotFound
 			if errors.As(err, &e) {
 				// If the backend service is gone, we construct a BackendService with the same name
@@ -294,6 +325,12 @@ func (b *ProdBackendController) ReconcileBackends(ctx context.Context, actual, i
 				}
 			} else if err != nil {
 				return
+			}
+
+			// Make a deep copy of the current backend ervice's backends configuration
+			currentBackends = make([]compute.Backend, len(oldSvc.Backends))
+			for _, cb := range oldSvc.Backends {
+				currentBackends = append(currentBackends, *cb)
 			}
 
 			var newSvc *compute.BackendService
@@ -386,7 +423,26 @@ func (b *ProdBackendController) ReconcileBackends(ctx context.Context, actual, i
 				}
 			}
 			if len(upsert.backends) > 0 {
-				err = b.updateBackends(ctx, upsert.name, upsert.region, newSvc, forceCapacity, deleting)
+				// Compare existing backends to the backends from this upsert, if they all match,
+				// do nothing.
+				allMatch := true
+				for _, be := range upsert.backends {
+					found := false
+					for _, obe := range currentBackends {
+						if b.compareBackends(obe, be) {
+							found = true
+							break
+						}
+					}
+					if !found {
+						allMatch = false
+						break
+					}
+				}
+				if !allMatch || deleting {
+					logger.Info("Updating backends for service", "service", newSvc, "deleting", deleting)
+					err = b.updateBackends(ctx, upsert.name, upsert.region, newSvc, forceCapacity, deleting)
+				}
 			}
 			if err != nil {
 				return err

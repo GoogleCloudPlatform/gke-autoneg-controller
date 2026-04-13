@@ -55,13 +55,22 @@ output "secondary_service_name" {
 
 output "ilb_primary_backend_name" {
   description = "Primary ILB backend service name"
-  value       = module.ilb-primary[""].backend_service_ids[keys(module.ilb-primary[""].backend_service_ids)[0]]
+  value       = module.ilb-primary[""].backend_service_ids[local.ilb_backend_service_primary]
 }
 
 output "ilb_secondary_backend_name" {
   description = "Primary ILB backend service name"
-  value       = var.secondary_region != null ? module.ilb-secondary[""].backend_service_ids[keys(module.ilb-secondary[""].backend_service_ids)[0]] : null
+  value       = var.secondary_region != null ? module.ilb-secondary[""].backend_service_ids[local.ilb_backend_service_primary] : null
+}
 
+output "ilb_primary_alt_backend_name" {
+  description = "Primary ILB alternative backend service name"
+  value       = module.ilb-primary[""].backend_service_ids[local.ilb_backend_alt_service_primary]
+}
+
+output "ilb_secondary_alt_backend_name" {
+  description = "Primary ILB alternative backend service name"
+  value       = var.secondary_region != null ? module.ilb-secondary[""].backend_service_ids[local.ilb_backend_alt_service_secondary] : null
 }
 
 output "xlb_backend_name" {

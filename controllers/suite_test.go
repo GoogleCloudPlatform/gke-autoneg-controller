@@ -107,6 +107,7 @@ var _ = BeforeSuite(func() {
 		AllowServiceName:    true,
 		AlwaysReconcile:     true,
 		ReconcileDuration:   &duration,
+		ErrorCount:          make(map[string]int, 0),
 	}
 	sr.RegisterMetrics()
 	err = sr.SetupWithManager(k8sManager)
