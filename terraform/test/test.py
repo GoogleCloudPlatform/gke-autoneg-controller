@@ -241,8 +241,8 @@ def remove_configuration(config: types.SimpleNamespace, primary_client: kubernet
     svc_on_primary = get_service(primary_client, config.primary_service[0], config.primary_service[1])
     svc_on_secondary = get_service(secondary_client, config.secondary_service[0], config.secondary_service[1])
 
-    svc_on_primary.metadata.annotations.pop("controller.autoneg.dev/neg", None)
-    svc_on_secondary.metadata.annotations.pop("controller.autoneg.dev/neg", None)
+    svc_on_primary.metadata.annotations["controller.autoneg.dev/neg"] = "{}"
+    svc_on_secondary.metadata.annotations["controller.autoneg.dev/neg"] = "{}"
 
     patch_service(primary_client, config.primary_service[0], config.primary_service[1], svc_on_primary)
     patch_service(secondary_client, config.secondary_service[0], config.secondary_service[1], svc_on_secondary)
