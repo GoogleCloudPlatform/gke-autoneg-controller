@@ -210,6 +210,7 @@ func main() {
 		ReconcileDuration:                 &reconcileDuration,
 		UseSvcNeg:                         useSvcNeg,
 		MaxErrors:                         maximumErrors,
+		ErrorCount:                        make(map[string]int, 0),
 	}
 	serviceReconciler.RegisterMetrics()
 	if err = serviceReconciler.SetupWithManager(mgr); err != nil {
