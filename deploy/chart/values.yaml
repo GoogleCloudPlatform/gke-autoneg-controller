@@ -13,10 +13,13 @@ labels:
 securityContext:
   runAsNonRoot: true
 
-# -- Autoscaling ranges, set minReplicas and maxReplicas if required
-autoscaling: {}
-#  minReplicas: 1
-#  maxReplicas: 10
+# Autoscaling configuration for HorizontalPodAutoscaler
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
 
 replicas: 2
 affinity:

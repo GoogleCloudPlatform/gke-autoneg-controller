@@ -109,6 +109,22 @@ variable "autopilot" {
   default     = false
 }
 
+variable "autoscaling" {
+  description = "Horizontal Pod Autoscaler configuration"
+  type = object({
+    enabled                              = bool
+    min_replicas                         = optional(number, 1)
+    max_replicas                         = optional(number, 10)
+    target_cpu_utilization_percentage    = optional(number, 80)
+    target_memory_utilization_percentage = optional(number, 80)
+  })
+  default = {
+    enabled      = false
+    min_replicas = 1
+    max_replicas = 10
+  }
+}
+
 variable "manager_configuration" {
   description = "Container command line parameters"
   type        = list(string)

@@ -267,7 +267,7 @@ resource "kubernetes_deployment_v1" "deployment_autoneg_controller_manager" {
   }
 
   spec {
-    replicas = var.replicas
+    replicas = var.autoscaling.enabled ? null : var.replicas
     selector {
       match_labels = {
         app           = "autoneg"
@@ -406,7 +406,7 @@ resource "kubernetes_deployment_v1" "deployment_autoneg_controller_manager_autop
   }
 
   spec {
-    replicas = var.replicas
+    replicas = var.autoscaling.enabled ? null : var.replicas
     selector {
       match_labels = {
         app           = "autoneg"
@@ -550,6 +550,52 @@ resource "kubernetes_pod_disruption_budget_v1" "pdb_autoneg_controller" {
       match_labels = {
         app           = "autoneg"
         control-plane = "controller-manager"
+      }
+    }
+  }
+}
+
+resource "kubernetes_horizontal_pod_autoscaler_v2" "hpa_autoneg_controller" {
+  count = var.autoscaling.enabled ? 1 : 0
+
+  metadata {
+    name      = "autoneg-controller-manager"
+    namespace = kubernetes_namespace_v1.namespace_autoneg_system.metadata[0].name
+    labels = {
+      app           = "autoneg"
+      control-plane = "controller-manager"
+    }
+  }
+
+  spec {
+    scale_target_ref {
+      api_version = "apps/v1"
+      kind        = "Deployment"
+      name        = "autoneg-controller-manager"
+    }
+
+    min_replicas = var.autoscaling.min_replicas
+    max_replicas = var.autoscaling.max_replicas
+
+    metric {
+      type = "Resource"
+      resource {
+        name = "cpu"
+        target {
+          type                = "Utilization"
+          average_utilization = var.autoscaling.target_cpu_utilization_percentage
+        }
+      }
+    }
+
+    metric {
+      type = "Resource"
+      resource {
+        name = "memory"
+        target {
+          type                = "Utilization"
+          average_utilization = var.autoscaling.target_memory_utilization_percentage
+        }
       }
     }
   }

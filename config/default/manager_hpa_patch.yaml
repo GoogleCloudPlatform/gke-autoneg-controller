@@ -1,0 +1,3 @@
+# Remove .spec.replicas from the Deployment so the HPA controls the replica count.
+- op: remove
+  path: /spec/replicas

@@ -1,6 +1,6 @@
 # autoneg-controller-manager
 
-![Version: 1.0.3](https://img.shields.io/badge/Version-1.0.3-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 2.0.0](https://img.shields.io/badge/AppVersion-2.0.0-informational?style=flat-square)
+![Version: 1.1.0](https://img.shields.io/badge/Version-1.1.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 2.0.3](https://img.shields.io/badge/AppVersion-2.0.3-informational?style=flat-square)
 
 A Helm chart for autoneg-controller-manager.
 
@@ -17,7 +17,11 @@ A Helm chart for autoneg-controller-manager.
 | affinity.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution[0].podAffinityTerm.topologyKey | string | `"kubernetes.io/hostname"` |  |
 | affinity.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution[0].weight | int | `100` |  |
 | annotations | object | `{}` |  |
-| autoscaling | object | `{}` | Autoscaling ranges, set minReplicas and maxReplicas if required |
+| autoscaling.enabled | bool | `false` |  |
+| autoscaling.maxReplicas | int | `10` |  |
+| autoscaling.minReplicas | int | `1` |  |
+| autoscaling.targetCPUUtilizationPercentage | int | `80` |  |
+| autoscaling.targetMemoryUtilizationPercentage | int | `80` |  |
 | createNamespace | bool | `true` |  |
 | gke_autoneg_controller.args[0] | string | `"--health-probe-bind-address=:8081"` |  |
 | gke_autoneg_controller.args[1] | string | `"--metrics-bind-address=:8443"` |  |

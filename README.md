@@ -197,7 +197,7 @@ module "autoneg" {
 resource "helm_release" "autoneg" {
   name       = "autoneg"
   chart      = "autoneg-controller-manager"
-  version    = "1.0.2"
+  version    = "1.1.0"
   repository = "https://googlecloudplatform.github.io/gke-autoneg-controller/"
   namespace  = "autoneg-system"
 
