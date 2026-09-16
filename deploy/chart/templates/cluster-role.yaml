@@ -37,12 +37,6 @@ rules:
   - patch
   - update
 - apiGroups:
-  - ""
-  resources:
-  - services/finalizers
-  verbs:
-  - update
-- apiGroups:
   - "networking.gke.io"
   resources:
   - servicenetworkendpointgroups
