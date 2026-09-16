@@ -24,27 +24,27 @@ If release name contains chart name it will be used as a full name.
 {{- end }}
 
 {{/*
-Return the full image reference. Prefer digest if provided.
-- If .Values.gke_autoneg_controller.image.digest is set: repo@digest
-- Else if .Values.gke_autoneg_controller.image.tag is set: repo:tag
+Return the full image reference.
+- If both tag and digest are set: repo:tag@digest
+- If only digest is set: repo@digest
+- If only tag is set: repo:tag
 - Else: repo:v.Chart.AppVersion
-Also: prevent using both tag and digest.
 */}}
 {{- define "autoneg.image" -}}
 {{- $repo := required "gke_autoneg_controller.image.repository is required" .Values.gke_autoneg_controller.image.repository -}}
 {{- $tag := .Values.gke_autoneg_controller.image.tag | toString | trim -}}
 {{- $digest := .Values.gke_autoneg_controller.image.digest | toString | trim -}}
 
-{{- if and $tag $digest -}}
-  {{- fail "Specify either gke_autoneg_controller.image.tag or gke_autoneg_controller.image.digest, not both." -}}
-{{- end -}}
-
 {{- if $digest -}}
   {{- if not (regexMatch `^sha256:[A-Fa-f0-9]{64}$` $digest) -}}
     {{- fail (printf "gke_autoneg_controller.image.digest must match ^sha256:[0-9a-f]{64}$, got %q" $digest) -}}
   {{- end -}}
 
-  {{- $repo -}}@{{ $digest }}
+  {{- if $tag -}}
+    {{- $repo -}}:{{ $tag }}@{{ $digest }}
+  {{- else -}}
+    {{- $repo -}}@{{ $digest }}
+  {{- end -}}
 {{- else if $tag -}}
   {{- $repo -}}:{{ $tag }}
 {{- else -}}
