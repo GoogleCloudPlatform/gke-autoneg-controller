@@ -10,4 +10,4 @@ spec:
   - name: https
     port: {{ .Values.service.port }}
     targetPort: metrics
-  selector: {{- include "autoneg.selectorLabels" . | nindent 4 }}
+  selector: {{- include "autoneg.selectorLabels" . | nindent 4 -}}

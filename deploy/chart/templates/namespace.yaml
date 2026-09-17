@@ -10,4 +10,4 @@ metadata:
     {{- toYaml . | nindent 4 }}
   {{- end }}
   name: {{ include "autoneg.namespace" . | quote }}
-{{ end }}
+{{- end -}}
