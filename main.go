@@ -65,6 +65,7 @@ func init() {
 
 func main() {
 	var metricsAddr string
+	var secureMetrics bool
 	var probeAddr string
 	var maxRatePerEndpointDefault float64
 	var maxConnectionsPerEndpointDefault float64
@@ -83,6 +84,7 @@ func main() {
 	var leaderElectionRenewDeadline time.Duration
 	var maximumErrors int
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
+	flag.BoolVar(&secureMetrics, "metrics-secure", true, "If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
 	flag.BoolVar(&useAuthorizationForMetrics, "metrics-authorization", true, "Enforce authorization for metrics endpoint")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.Float64Var(&maxRatePerEndpointDefault, "max-rate-per-endpoint", 0, "Default max rate per endpoint. Can be overridden by user config.")
@@ -162,7 +164,7 @@ func main() {
 
 	metricsServerOptions := metricsserver.Options{
 		BindAddress:   metricsAddr,
-		SecureServing: true,
+		SecureServing: secureMetrics,
 		TLSOpts:       []func(*tls.Config){disableHTTP2},
 	}
 	if useAuthorizationForMetrics {
