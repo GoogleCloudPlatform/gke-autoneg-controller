@@ -19,4 +19,4 @@ spec:
       insecureSkipVerify: true
 {{- end }}
     interval: 30s
-{{- end }}
+{{- end -}}

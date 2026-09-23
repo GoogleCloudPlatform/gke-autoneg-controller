@@ -12,4 +12,4 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: {{ include "autoneg.serviceAccountName" . | quote }}
-  namespace: {{ include "autoneg.namespace" . | quote }}
+  namespace: {{ include "autoneg.namespace" . | quote -}}
