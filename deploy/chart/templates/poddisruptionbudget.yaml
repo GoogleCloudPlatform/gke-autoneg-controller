@@ -16,4 +16,4 @@ spec:
   {{- else if .Values.podDisruptionBudget.maxUnavailable }}
   maxUnavailable: {{ .Values.podDisruptionBudget.maxUnavailable }}
   {{- end }}
-{{- end }}
+{{- end -}}

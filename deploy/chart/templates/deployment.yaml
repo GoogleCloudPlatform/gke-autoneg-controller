@@ -11,10 +11,7 @@ metadata:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
-  minReadySeconds: {{ .Values.minReadySeconds | default 0 }}
-{{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicas }}
-{{- end }}
   selector:
     matchLabels:
       {{- include "autoneg.selectorLabels" . | nindent 6 }}
@@ -78,13 +75,13 @@ spec:
           image: "{{ include "autoneg.image" . }}"
           securityContext:
             {{- toYaml .Values.gke_autoneg_controller.securityContext | nindent 12 }}
+          command:
+            {{- toYaml .Values.gke_autoneg_controller.command | nindent 12 }}
           args:
             {{- toYaml .Values.gke_autoneg_controller.args | nindent 12 }}
             {{- if .Values.podMonitoring.enabled }}
             - --metrics-authorization=false
             {{- end }}
-          command:
-            {{- toYaml .Values.gke_autoneg_controller.command | nindent 12 }}
           {{- if .Values.gke_autoneg_controller.livenessProbe }}
           livenessProbe:
             {{- toYaml .Values.gke_autoneg_controller.livenessProbe | nindent 12 }}
@@ -95,8 +92,10 @@ spec:
           {{- end }}
           resources:
             {{- toYaml .Values.gke_autoneg_controller.resources | nindent 12 }}
+          {{- with .Values.gke_autoneg_controller.volumeMounts }}
           volumeMounts:
-            {{- toYaml .Values.gke_autoneg_controller.volumeMounts | nindent 12 }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
             {{- toYaml .Values.gke_autoneg_controller.ports | nindent 12 }}
       {{- with .Values.nodeSelector }}
@@ -111,4 +110,4 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds | default 10 }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds | default 10 -}}
