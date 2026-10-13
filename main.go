@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -36,6 +37,7 @@ import (
 	"google.golang.org/api/option"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/validation"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/ingress-gce/pkg/apis/svcneg/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -44,6 +46,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/yaml"
 
 	"github.com/GoogleCloudPlatform/gke-autoneg-controller/controllers"
 	//+kubebuilder:scaffold:imports
@@ -83,6 +86,7 @@ func main() {
 	var leaderElectionLeaseDuration time.Duration
 	var leaderElectionRenewDeadline time.Duration
 	var maximumErrors int
+	var preferredRegionsConfigFile string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&secureMetrics, "metrics-secure", true, "If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
 	flag.BoolVar(&useAuthorizationForMetrics, "metrics-authorization", true, "Enforce authorization for metrics endpoint")
@@ -106,6 +110,7 @@ func main() {
 	flag.BoolVar(&useSvcNeg, "use-svcneg", true, "Use service neg custom resource to get the NEG zone info.")
 	flag.IntVar(&maximumErrors, "maximum-errors", 0, "Maximum consecutive errors in reconciliation, until controller gives up (0 means unlimited). Defaults to 0.")
 	flag.BoolVar(&debug, "debug", false, "Enable debug logging.")
+	flag.StringVar(&preferredRegionsConfigFile, "preferred-regions-config", "", "Path to a YAML file mapping namespaces and Services to preferred regions. Read once at startup.")
 
 	opts := zap.Options{
 		Development: debug,
@@ -126,6 +131,26 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	preferredRegions, err := loadPreferredRegions(preferredRegionsConfigFile)
+	if err != nil {
+		setupLog.Error(err, "invalid preferred regions configuration")
+		os.Exit(1)
+	}
+	var localRegion string
+	if len(preferredRegions) > 0 {
+		metadataCtx, metadataCancel := context.WithTimeout(ctx, 30*time.Second)
+		zone, zoneErr := metadata.ZoneWithContext(metadataCtx)
+		metadataCancel()
+		if zoneErr == nil {
+			localRegion, zoneErr = regionFromZone(zone)
+		}
+		if zoneErr != nil {
+			setupLog.Error(zoneErr, "can't determine local region for preferred regions configuration")
+			os.Exit(1)
+		}
+		setupLog.Info("Configured regional preferences", "localRegion", localRegion)
+	}
 
 	s, err := compute.NewService(ctx, option.WithUserAgent(useragent))
 	if err != nil {
@@ -213,6 +238,8 @@ func main() {
 		UseSvcNeg:                         useSvcNeg,
 		MaxErrors:                         maximumErrors,
 		ErrorCount:                        make(map[string]int, 0),
+		PreferredRegions:                  preferredRegions,
+		LocalRegion:                       localRegion,
 	}
 	serviceReconciler.RegisterMetrics()
 	if err = serviceReconciler.SetupWithManager(mgr); err != nil {
@@ -245,4 +272,48 @@ func getProject() string {
 		return p
 	}
 	return os.Getenv("PROJECT_ID")
+}
+
+var regionPattern = regexp.MustCompile(`^[a-z]+(?:-[a-z]+)+[0-9]+$`)
+
+type preferredRegionsConfig struct {
+	PreferredRegions map[string]map[string]string `json:"preferredRegions"`
+}
+
+// shortcut: configuration is loaded only at startup; add reload support if updates must apply without a restart.
+func loadPreferredRegions(path string) (map[string]map[string]string, error) {
+	if path == "" {
+		return nil, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read preferred regions config: %w", err)
+	}
+	var config preferredRegionsConfig
+	if err := yaml.UnmarshalStrict(data, &config); err != nil {
+		return nil, fmt.Errorf("decode preferred regions config: %w", err)
+	}
+	for namespace, services := range config.PreferredRegions {
+		if problems := validation.IsDNS1123Label(namespace); len(problems) > 0 {
+			return nil, fmt.Errorf("invalid namespace %q: %s", namespace, strings.Join(problems, "; "))
+		}
+		for service, region := range services {
+			if problems := validation.IsDNS1123Label(service); len(problems) > 0 {
+				return nil, fmt.Errorf("invalid service name %q: %s", service, strings.Join(problems, "; "))
+			}
+			if !regionPattern.MatchString(region) {
+				return nil, fmt.Errorf("invalid preferred region %q for %s/%s", region, namespace, service)
+			}
+		}
+	}
+	return config.PreferredRegions, nil
+}
+
+func regionFromZone(zone string) (string, error) {
+	region := zone[strings.LastIndex(zone, "/")+1:]
+	index := strings.LastIndex(region, "-")
+	if index < 0 || len(region[index+1:]) != 1 || region[index+1] < 'a' || region[index+1] > 'z' || !regionPattern.MatchString(region[:index]) {
+		return "", fmt.Errorf("invalid metadata zone %q", zone)
+	}
+	return region[:index], nil
 }

@@ -66,6 +66,7 @@ Specify options to configure the backends representing the NEGs that will be ass
   * The default name value for old `anthos.cft.dev/autoneg` annotation is service name.
   * Note that `name` is optional here and defaults to a value generated following `default-backendservice-name`.
 * `region`: optional. Used to specify that this is a regional backend service.
+* `preference`: optional. `PREFERRED` or `DEFAULT`. An explicit value overrides the controller's preferred-region mapping for this backend.
 * `max_rate_per_endpoint`: required/optional. Integer representing the maximum rate a pod can handle. Pick either rate or connection.
 * `max_connections_per_endpoint`: required/optional. Integer representing the maximum amount of connections a pod can handle. Pick either rate or connection.
 * `initial_capacity`: optional. Integer configuring the initial capacityScaler, expressed as a percentage between 0 and 100. If set to 0, the backend service will not receive any traffic until an operator or other service adjusts the [capacity scaler setting](https://cloud.google.com/load-balancing/docs/backend-service#capacity_scaler). Please note that unless you have existing backends in a backend service, you cannot set `initial_capacity` to zero (at least some backends have to higher than zero value).
@@ -85,6 +86,7 @@ The controller parameters can be customized via changing the [controller deploym
 * `--max-rate-per-endpoint`: optional. Sets a default value for max-rate-per-endpoint that can be overridden by user config. Defaults to 0.
 * `--max-connections-per-endpoint`: optional. Same as above but for connections.
 * `--namespaces`: optional. Comma-separated list of namespaces to reconcile.
+* `--preferred-regions-config`: optional. Path to a YAML file mapping namespaces and Services to preferred regions. Read once at startup; see [Automatic regional preference](#automatic-regional-preference).
 * `--always-reconcile`: optional. Makes it possible to reconcile periodically even if the status annotations don't change. Defaults to true (since version 2.0.0).
 * `--reconcile-period`: optional. Sets a reconciliation duration if always-reconcile mode is on. Defaults to 5 minutes (since version 2.0.0).
 * `--use-svcneg`: optional. Uses the `ServiceNetworkEndpointGroup` object to retrieve the NEGs. Defaults to true (since version 2.0.0).
@@ -94,6 +96,68 @@ The controller parameters can be customized via changing the [controller deploym
 * `--zap-encoder`: optional. Sets the log output format. Options: `json`, `console`. Defaults to `json`.
 * `--zap-devel`: optional. Enables development mode with console encoder, debug level, and warn stack traces.
 * `--maximum-errors`. optional. Sets the maximum consecutive reconciliation failures until the controller gives up. Zero means no limit. Defaults to `0`.
+
+### Automatic regional preference
+
+Services can share the same autoneg configuration across clusters while the controller
+assigns a preference based on each Service's preferred region. Mount a configuration
+file and pass `--preferred-regions-config=/etc/autoneg/preferences.yaml`:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: autoneg-preferences
+  # Create this ConfigMap in the controller's namespace.
+data:
+  preferences.yaml: |
+    preferredRegions:
+      payments:
+        checkout: europe-west1
+        refunds: us-central1
+      search:
+        query: europe-west4
+```
+
+The keys below `preferredRegions` are Kubernetes namespaces, followed by Service
+names. Each mapped Service's backends receive `PREFERRED` when the local region
+matches, or `DEFAULT` otherwise. Explicit backend `preference` values take precedence.
+Unmapped Services keep their existing behavior. The controller records the effective
+preference in `controller.autoneg.dev/neg-status`, leaving the input annotations intact.
+Services still need the usual NEG and autoneg configuration annotations.
+
+The controller derives its local region from its node's zone using the GCE or GKE
+metadata server at startup. This assumes it manages Services in its own cluster.
+A missing file, malformed mapping, or failure to discover the local region prevents
+startup. Omitting the flag disables automatic regional preference and region discovery.
+Region values must be GCP region names such as `europe-west1`, rather than zone names
+or internal region aliases; the controller validates their format, not their existence.
+Restart all controller replicas after changing the file, including when removing a
+mapping. Removing a mapping restores the Service's annotation-defined preference
+(or `DEFAULT` when no explicit preference is configured).
+
+For Helm deployments, create the ConfigMap above and use the chart's existing
+arguments, volumes, and volume mounts:
+
+```yaml
+volumes:
+  - name: preferences
+    configMap:
+      name: autoneg-preferences
+gke_autoneg_controller:
+  args:
+    - --health-probe-bind-address=:8081
+    - --metrics-bind-address=:8443
+    - --zap-encoder=json
+    - --preferred-regions-config=/etc/autoneg/preferences.yaml
+  volumeMounts:
+    - name: preferences
+      mountPath: /etc/autoneg
+      readOnly: true
+```
+
+For other deployments, add the same argument, ConfigMap volume, and mount to the
+controller's Deployment. Keep any other arguments and mounts required by your setup.
 
 ## IAM considerations
 

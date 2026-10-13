@@ -57,6 +57,8 @@ type ServiceReconciler struct {
 	ReconcileDuration                 *time.Duration
 	DeregisterNEGsOnAnnotationRemoval bool
 	UseSvcNeg                         bool
+	PreferredRegions                  map[string]map[string]string
+	LocalRegion                       string
 
 	MetricBackendServicesPerService *prometheus.GaugeVec
 	MetricNEGsPerService            *prometheus.GaugeVec

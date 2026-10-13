@@ -193,6 +193,16 @@ func (b *ProdBackendController) compareBackends(left compute.Backend, right comp
 	if left.MaxRatePerEndpoint != right.MaxRatePerEndpoint {
 		return false
 	}
+	// The API's DEFAULT preference is equivalent to an omitted preference.
+	if left.Preference == "" {
+		left.Preference = "DEFAULT"
+	}
+	if right.Preference == "" {
+		right.Preference = "DEFAULT"
+	}
+	if left.Preference != right.Preference {
+		return false
+	}
 	// Assume custom metrics are in the same order
 	if len(left.CustomMetrics) != len(right.CustomMetrics) {
 		return false
@@ -378,6 +388,12 @@ func (b *ProdBackendController) ReconcileBackends(ctx context.Context, actual, i
 						be.BalancingMode = u.BalancingMode
 						be.MaxRatePerEndpoint = u.MaxRatePerEndpoint
 						be.MaxConnectionsPerEndpoint = u.MaxConnectionsPerEndpoint
+						if u.Preference == "" && be.Preference != "" {
+							// Explicitly reset a preference when its configuration is removed.
+							be.Preference = "DEFAULT"
+						} else {
+							be.Preference = u.Preference
+						}
 						if len(u.CustomMetrics) > 0 {
 							// deep copy it
 							be.CustomMetrics = slices.Collect(func(yield func(*compute.BackendCustomMetric) bool) {
@@ -666,6 +682,16 @@ func getStatuses(ctx context.Context, namespace string, name string, annotations
 		for port, cfgs := range tempConfig.BackendServices {
 			s.config.BackendServices[port] = make(map[string]AutonegNEGConfig, len(cfgs))
 			for _, cfg := range cfgs {
+				if preferredRegion := r.PreferredRegions[namespace][name]; cfg.Preference == "" && preferredRegion != "" {
+					if r.LocalRegion == "" {
+						err = fmt.Errorf("local region is required for preferred region of %s/%s", namespace, name)
+						return
+					}
+					cfg.Preference = "DEFAULT"
+					if r.LocalRegion == preferredRegion {
+						cfg.Preference = "PREFERRED"
+					}
+				}
 				if cfg.Name == "" || !r.AllowServiceName {
 					// Default to name generated using serviceNameTemplate
 					cfg.Name = generateServiceName(namespace, name, port, r.ServiceNameTemplate)
