@@ -35,16 +35,9 @@ spec:
       serviceAccountName: {{ include "autoneg.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.securityContext | nindent 8 }}
-      {{- if or .Values.volumes .Values.preferredRegions }}
+      {{- if .Values.volumes }}
       volumes:
-        {{- with .Values.volumes }}
         {{- toYaml .Values.volumes | nindent 8 }}
-        {{- end }}
-        {{- if .Values.preferredRegions }}
-        - name: preferred-regions
-          configMap:
-            name: {{ include "autoneg.fullname" $ }}-preferred-regions
-        {{- end }}
       {{- end }}
       {{- if .Values.initContainers }}
       initContainers:
@@ -86,12 +79,9 @@ spec:
             {{- toYaml .Values.gke_autoneg_controller.command | nindent 12 }}
           args:
             {{- toYaml .Values.gke_autoneg_controller.args | nindent 12 }}
-            {{ if .Values.preferredRegions }}
-            - --preferred-regions-config=/etc/autoneg/preferences.yaml
-            {{ end }}
-            {{ if .Values.podMonitoring.enabled }}
+            {{- if .Values.podMonitoring.enabled }}
             - --metrics-authorization=false
-            {{ end }}
+            {{- end }}
           {{- if .Values.gke_autoneg_controller.livenessProbe }}
           livenessProbe:
             {{- toYaml .Values.gke_autoneg_controller.livenessProbe | nindent 12 }}
@@ -102,16 +92,9 @@ spec:
           {{- end }}
           resources:
             {{- toYaml .Values.gke_autoneg_controller.resources | nindent 12 }}
-          {{- if or .Values.gke_autoneg_controller.volumeMounts .Values.preferredRegions }}
+          {{- with .Values.gke_autoneg_controller.volumeMounts }}
           volumeMounts:
-            {{- with .Values.gke_autoneg_controller.volumeMounts }}
             {{- toYaml . | nindent 12 }}
-            {{- end }}
-            {{ if .Values.preferredRegions }}
-            - name: preferred-regions
-              mountPath: /etc/autoneg
-              readOnly: true
-            {{ end }}
           {{- end }}
           ports:
             {{- toYaml .Values.gke_autoneg_controller.ports | nindent 12 }}

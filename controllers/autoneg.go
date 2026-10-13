@@ -641,6 +641,9 @@ func validateConfig(config AutonegConfig) error {
 			if cfg.Preference != "" && cfg.Preference != "DEFAULT" && cfg.Preference != "PREFERRED" {
 				return fmt.Errorf("preference for backend %q must be DEFAULT or PREFERRED, but was %q", cfg.Name, cfg.Preference)
 			}
+			if cfg.PreferredRegion != "" && !regionPattern.MatchString(cfg.PreferredRegion) {
+				return fmt.Errorf("preferred_region for backend %q must be a GCP region, but was %q", cfg.Name, cfg.PreferredRegion)
+			}
 		}
 	}
 
@@ -682,13 +685,19 @@ func getStatuses(ctx context.Context, namespace string, name string, annotations
 		for port, cfgs := range tempConfig.BackendServices {
 			s.config.BackendServices[port] = make(map[string]AutonegNEGConfig, len(cfgs))
 			for _, cfg := range cfgs {
-				if preferredRegion := r.PreferredRegions[namespace][name]; cfg.Preference == "" && preferredRegion != "" {
-					if r.LocalRegion == "" {
-						err = fmt.Errorf("local region is required for preferred region of %s/%s", namespace, name)
+				if cfg.PreferredRegion != "" && !regionPattern.MatchString(cfg.PreferredRegion) {
+					err = fmt.Errorf("preferred_region for backend %q must be a GCP region, but was %q", cfg.Name, cfg.PreferredRegion)
+					return
+				}
+				if cfg.Preference == "" && cfg.PreferredRegion != "" {
+					var localRegion string
+					localRegion, err = r.getLocalRegion(ctx)
+					if err != nil {
+						err = fmt.Errorf("preferred_region for %s/%s: %w", namespace, name, err)
 						return
 					}
 					cfg.Preference = "DEFAULT"
-					if r.LocalRegion == preferredRegion {
+					if localRegion == cfg.PreferredRegion {
 						cfg.Preference = "PREFERRED"
 					}
 				}

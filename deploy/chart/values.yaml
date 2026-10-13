@@ -45,9 +45,6 @@ podMonitoring:
   scheme: https
   insecureSkipVerify: true
 
-# Namespace and Service names mapped to their preferred GCP regions.
-preferredRegions: {}
-
 serviceAccount:
   create: true
   name: autoneg-controller-manager

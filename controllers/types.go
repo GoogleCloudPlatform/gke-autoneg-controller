@@ -75,6 +75,7 @@ type AutonegNEGConfig struct {
 	InitialCapacity *StringOrInt          `json:"initial_capacity,omitempty"`
 	CapacityScaler  *StringOrInt          `json:"capacity_scaler,omitempty"`
 	Preference      string                `json:"preference,omitempty"`
+	PreferredRegion string                `json:"preferred_region,omitempty"`
 }
 
 // AutonegSyncConfig specifies additional configuration which to sync

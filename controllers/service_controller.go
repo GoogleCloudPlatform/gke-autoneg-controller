@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -57,8 +58,9 @@ type ServiceReconciler struct {
 	ReconcileDuration                 *time.Duration
 	DeregisterNEGsOnAnnotationRemoval bool
 	UseSvcNeg                         bool
-	PreferredRegions                  map[string]map[string]string
-	LocalRegion                       string
+	localRegion                       string
+	localRegionMu                     sync.Mutex
+	regionResolver                    func(context.Context) (string, error)
 
 	MetricBackendServicesPerService *prometheus.GaugeVec
 	MetricNEGsPerService            *prometheus.GaugeVec
