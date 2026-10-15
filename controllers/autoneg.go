@@ -641,8 +641,10 @@ func validateConfig(config AutonegConfig) error {
 			if cfg.Preference != "" && cfg.Preference != "DEFAULT" && cfg.Preference != "PREFERRED" {
 				return fmt.Errorf("preference for backend %q must be DEFAULT or PREFERRED, but was %q", cfg.Name, cfg.Preference)
 			}
-			if cfg.PreferredRegion != "" && !regionPattern.MatchString(cfg.PreferredRegion) {
-				return fmt.Errorf("preferred_region for backend %q must be a GCP region, but was %q", cfg.Name, cfg.PreferredRegion)
+			for _, region := range cfg.PreferredRegions {
+				if !regionPattern.MatchString(region) {
+					return fmt.Errorf("preferred_regions for backend %q must contain GCP regions, but included %q", cfg.Name, region)
+				}
 			}
 		}
 	}
@@ -685,19 +687,21 @@ func getStatuses(ctx context.Context, namespace string, name string, annotations
 		for port, cfgs := range tempConfig.BackendServices {
 			s.config.BackendServices[port] = make(map[string]AutonegNEGConfig, len(cfgs))
 			for _, cfg := range cfgs {
-				if cfg.PreferredRegion != "" && !regionPattern.MatchString(cfg.PreferredRegion) {
-					err = fmt.Errorf("preferred_region for backend %q must be a GCP region, but was %q", cfg.Name, cfg.PreferredRegion)
-					return
+				for _, region := range cfg.PreferredRegions {
+					if !regionPattern.MatchString(region) {
+						err = fmt.Errorf("preferred_regions for backend %q must contain GCP regions, but included %q", cfg.Name, region)
+						return
+					}
 				}
-				if cfg.Preference == "" && cfg.PreferredRegion != "" {
+				if cfg.Preference == "" && len(cfg.PreferredRegions) > 0 {
 					var localRegion string
 					localRegion, err = r.getLocalRegion(ctx)
 					if err != nil {
-						err = fmt.Errorf("preferred_region for %s/%s: %w", namespace, name, err)
+						err = fmt.Errorf("preferred_regions for %s/%s: %w", namespace, name, err)
 						return
 					}
 					cfg.Preference = "DEFAULT"
-					if localRegion == cfg.PreferredRegion {
+					if slices.Contains(cfg.PreferredRegions, localRegion) {
 						cfg.Preference = "PREFERRED"
 					}
 				}

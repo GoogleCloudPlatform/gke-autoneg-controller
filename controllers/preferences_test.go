@@ -17,17 +17,19 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-func TestReconcilePreferredRegion(t *testing.T) {
+func TestReconcilePreferredRegions(t *testing.T) {
 	for _, tt := range []struct {
-		name   string
-		region string
-		want   string
+		name       string
+		region     string
+		want       string
+		wantSingle string
 	}{
-		{"preferred region", "europe-west1", "PREFERRED"},
-		{"other region", "us-central1", "DEFAULT"},
+		{"first preferred region", "europe-west1", "PREFERRED", "DEFAULT"},
+		{"second preferred region", "us-central1", "PREFERRED", "PREFERRED"},
+		{"other region", "asia-east1", "DEFAULT", "DEFAULT"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			annotation := `{"backend_services":{"80":[{"name":"automatic","max_rate_per_endpoint":100,"preferred_region":"europe-west1"},{"name":"explicit-default","max_rate_per_endpoint":100,"preference":"DEFAULT","preferred_region":"europe-west1"}],"443":[{"name":"explicit-preferred","max_connections_per_endpoint":100,"preference":"PREFERRED","preferred_region":"europe-west1"},{"name":"automatic-tls","max_connections_per_endpoint":100,"preferred_region":"europe-west1"}]}}`
+			annotation := `{"backend_services":{"80":[{"name":"automatic","max_rate_per_endpoint":100,"preferred_regions":["europe-west1","us-central1"]},{"name":"single","max_rate_per_endpoint":100,"preferred_regions":["us-central1"]},{"name":"explicit-default","max_rate_per_endpoint":100,"preference":"DEFAULT","preferred_regions":["europe-west1","us-central1"]}],"443":[{"name":"explicit-preferred","max_connections_per_endpoint":100,"preference":"PREFERRED","preferred_regions":["europe-west1","us-central1"]},{"name":"automatic-tls","max_connections_per_endpoint":100,"preferred_regions":["europe-west1","us-central1"]}]}}`
 			svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{
 				Name: "checkout", Namespace: "payments",
 				Annotations: map[string]string{autonegAnnotation: annotation},
@@ -53,6 +55,7 @@ func TestReconcilePreferredRegion(t *testing.T) {
 			}
 			for _, expected := range []struct{ port, backend, preference string }{
 				{"80", "automatic", tt.want}, {"443", "automatic-tls", tt.want},
+				{"80", "single", tt.wantSingle},
 				{"80", "explicit-default", "DEFAULT"}, {"443", "explicit-preferred", "PREFERRED"},
 			} {
 				if got := status.BackendServices[expected.port][expected.backend].Preference; got != expected.preference {
@@ -63,7 +66,7 @@ func TestReconcilePreferredRegion(t *testing.T) {
 	}
 }
 
-func TestPreferredRegionLookup(t *testing.T) {
+func TestPreferredRegionsLookup(t *testing.T) {
 	lookupCount := 0
 	r := &ServiceReconciler{AllowServiceName: true, regionResolver: func(context.Context) (string, error) {
 		lookupCount++
@@ -72,7 +75,7 @@ func TestPreferredRegionLookup(t *testing.T) {
 		}
 		return "us-central1", nil
 	}}
-	annotation := map[string]string{autonegAnnotation: `{"backend_services":{"80":[{"name":"backend","max_rate_per_endpoint":100,"preferred_region":"us-central1"}]}}`}
+	annotation := map[string]string{autonegAnnotation: `{"backend_services":{"80":[{"name":"backend","max_rate_per_endpoint":100,"preferred_regions":["europe-west1","us-central1"]}]}}`}
 	if _, _, err := getStatuses(t.Context(), "ns", "svc", annotation, r); err == nil {
 		t.Fatal("metadata failure must fail reconciliation")
 	}
@@ -90,7 +93,8 @@ func TestPreferredRegionLookup(t *testing.T) {
 	}
 	for _, input := range []string{
 		`{"backend_services":{"80":[{"max_rate_per_endpoint":100}]}}`,
-		`{"backend_services":{"80":[{"max_rate_per_endpoint":100,"preference":"DEFAULT","preferred_region":"us-central1"}]}}`,
+		`{"backend_services":{"80":[{"max_rate_per_endpoint":100,"preferred_regions":[]}]}}`,
+		`{"backend_services":{"80":[{"max_rate_per_endpoint":100,"preference":"DEFAULT","preferred_regions":["us-central1"]}]}}`,
 	} {
 		fresh := &ServiceReconciler{ServiceNameTemplate: "{name}-{port}", regionResolver: func(context.Context) (string, error) {
 			t.Fatal("metadata lookup should not be needed")
@@ -100,13 +104,18 @@ func TestPreferredRegionLookup(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, _, err := getStatuses(t.Context(), "ns", "svc", map[string]string{
-		autonegAnnotation: `{"backend_services":{"80":[{"max_rate_per_endpoint":100,"preferred_region":"us-central1-a"}]}}`,
-	}, &ServiceReconciler{regionResolver: func(context.Context) (string, error) {
-		t.Fatal("invalid region should be rejected before metadata lookup")
-		return "", nil
-	}}); err == nil {
-		t.Fatal("zone must not be accepted as preferred_region")
+	for _, input := range []string{
+		`{"backend_services":{"80":[{"max_rate_per_endpoint":100,"preferred_regions":["us-central1","us-central1-a"]}]}}`,
+		`{"backend_services":{"80":[{"max_rate_per_endpoint":100,"preferred_regions":"us-central1"}]}}`,
+	} {
+		if _, _, err := getStatuses(t.Context(), "ns", "svc", map[string]string{autonegAnnotation: input}, &ServiceReconciler{
+			regionResolver: func(context.Context) (string, error) {
+				t.Fatal("invalid preferred_regions should be rejected before metadata lookup")
+				return "", nil
+			},
+		}); err == nil {
+			t.Fatal("invalid preferred_regions must be rejected")
+		}
 	}
 }
 

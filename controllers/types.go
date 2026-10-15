@@ -67,15 +67,15 @@ type AutonegCustomMetric struct {
 // AutonegNEGConfig specifies the intended configuration of autoneg
 // stored in the controller.autoneg.dev/neg annotation
 type AutonegNEGConfig struct {
-	Name            string                `json:"name,omitempty"`
-	Region          string                `json:"region,omitempty"`
-	Rate            StringOrFloat         `json:"max_rate_per_endpoint,omitempty"`
-	Connections     StringOrFloat         `json:"max_connections_per_endpoint,omitempty"`
-	CustomMetrics   []AutonegCustomMetric `json:"custom_metrics,omitempty"`
-	InitialCapacity *StringOrInt          `json:"initial_capacity,omitempty"`
-	CapacityScaler  *StringOrInt          `json:"capacity_scaler,omitempty"`
-	Preference      string                `json:"preference,omitempty"`
-	PreferredRegion string                `json:"preferred_region,omitempty"`
+	Name             string                `json:"name,omitempty"`
+	Region           string                `json:"region,omitempty"`
+	Rate             StringOrFloat         `json:"max_rate_per_endpoint,omitempty"`
+	Connections      StringOrFloat         `json:"max_connections_per_endpoint,omitempty"`
+	CustomMetrics    []AutonegCustomMetric `json:"custom_metrics,omitempty"`
+	InitialCapacity  *StringOrInt          `json:"initial_capacity,omitempty"`
+	CapacityScaler   *StringOrInt          `json:"capacity_scaler,omitempty"`
+	Preference       string                `json:"preference,omitempty"`
+	PreferredRegions []string              `json:"preferred_regions,omitempty"`
 }
 
 // AutonegSyncConfig specifies additional configuration which to sync
