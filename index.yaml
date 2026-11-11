@@ -2,6 +2,16 @@ apiVersion: v1
 entries:
   autoneg-controller-manager:
   - apiVersion: v2
+    appVersion: 2.1.2
+    created: "2026-11-11T15:58:38.345222836Z"
+    description: 'A Helm chart for autoneg-controller-manager. '
+    digest: 03302ed6e433fca570d98f1e360aff4e0c306e3007318b4191beae7c854fbbb8
+    name: autoneg-controller-manager
+    type: application
+    urls:
+    - https://github.com/GoogleCloudPlatform/gke-autoneg-controller/releases/download/autoneg-controller-manager-1.0.8/autoneg-controller-manager-1.0.8.tgz
+    version: 1.0.8
+  - apiVersion: v2
     appVersion: 2.1.1
     created: "2026-11-11T15:56:33.866429436Z"
     description: 'A Helm chart for autoneg-controller-manager. '
@@ -101,4 +111,4 @@ entries:
     urls:
     - https://github.com/GoogleCloudPlatform/gke-autoneg-controller/releases/download/autoneg-controller-manager-0.1.0/autoneg-controller-manager-0.1.0.tgz
     version: 0.1.0
-generated: "2026-11-11T15:56:33.86647454Z"
+generated: "2026-11-11T15:58:38.345263091Z"
