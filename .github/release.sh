@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 version=""
 doit=""
 while getopts "r:d" option
@@ -62,5 +64,8 @@ else
     git push origin master
 
     echo git tag "v${version}"
-    # git tag "v${version}"
+    git tag "v${version}"
+
+    git push origin "v${version}"
+
 fi
