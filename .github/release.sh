@@ -59,7 +59,7 @@ else
     git add -u
     git commit -m "Release v${version}" 
 
-    git push origin main
+    git push origin master
 
     echo git tag "v${version}"
     # git tag "v${version}"
