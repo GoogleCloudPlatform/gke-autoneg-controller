@@ -1,10 +1,26 @@
 #!/bin/bash
 
-version="$1"
+version=""
+doit=""
+while getopts "r:d" option
+do
+   case $option in
+    r) # 
+        version=$OPTARG;;
+    d) # 
+        doit=1;;
+    ?) # Invalid option
+        echo "Error: Invalid option"
+        exit;;
+    esac
+done
+
 if [ -z "$version" ] ; then
     echo "Specify version to release!"
     exit 1
 fi
+
+echo "Releasing: ${version}"
 
 SED=sed
 if [ "$(uname -s)" == "Darwin" ] ; then
@@ -32,4 +48,11 @@ $SED -i -e "s/appVersion: .*$/appVersion: $version/" deploy/chart/Chart.yaml
 $SED -i -e "s/gke-autoneg-controller\/gke-autoneg-controller:[^\"]*\"/gke-autoneg-controller\/gke-autoneg-controller:v$version/g" README.md
 $SED -i -e "s/version    = \"[^\"]*\"/version    = \"$NEWCHARTVERSION\"/"  README.md
 
-echo git tag "v${version}"
+if [ ! -z "$doit" ] ; then
+    echo "Not releasing for real: "
+    echo git tag "v${version}"
+else
+    echo "Releasing: v${version}"
+    echo git tag "v${version}"
+    git tag "v${version}"
+fi
