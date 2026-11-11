@@ -8,7 +8,7 @@ do
     r) # 
         version=$OPTARG;;
     d) # 
-        doit=1;;
+        doit="yes";;
     ?) # Invalid option
         echo "Error: Invalid option"
         exit;;
@@ -48,11 +48,17 @@ $SED -i -e "s/appVersion: .*$/appVersion: $version/" deploy/chart/Chart.yaml
 $SED -i -e "s/gke-autoneg-controller\/gke-autoneg-controller:[^\"]*\"/gke-autoneg-controller\/gke-autoneg-controller:v$version/g" README.md
 $SED -i -e "s/version    = \"[^\"]*\"/version    = \"$NEWCHARTVERSION\"/"  README.md
 
-if [ ! -z "$doit" ] ; then
+if [ -z "$doit" ] ; then
     echo "Not releasing for real: "
     echo git tag "v${version}"
+    echo git add -u
+    echo git commit -m "Release v${version}" 
 else
     echo "Releasing: v${version}"
+
+    git add -u
+    git commit -m "Release v${version}" 
+
     echo git tag "v${version}"
     git tag "v${version}"
 fi
