@@ -189,7 +189,7 @@ spec:
             - --namespaces=autoneg-system
           command:
             - /manager
-          image: ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:v2.1.1
+          image: ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:v2.1.2
           livenessProbe:
             httpGet:
               path: /healthz

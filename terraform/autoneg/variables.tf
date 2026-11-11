@@ -62,7 +62,7 @@ variable "custom_role_add_random_suffix" {
 variable "controller_image" {
   type        = string
   description = "Autoneg controller container image"
-  default     = "ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:v2.1.1"
+  default     = "ghcr.io/googlecloudplatform/gke-autoneg-controller/gke-autoneg-controller:v2.1.2"
 }
 
 variable "image_pull_policy" {
