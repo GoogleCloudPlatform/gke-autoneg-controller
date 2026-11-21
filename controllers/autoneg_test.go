@@ -386,6 +386,83 @@ func TestDefaultMaxConnectionsEndpointWhenOverrideIsNotSet(t *testing.T) {
 	}
 }
 
+func TestInFlightConfigWithControllerDefaults(t *testing.T) {
+	tests := []struct {
+		name       string
+		reconciler *ServiceReconciler
+		config     string
+		err        bool
+		inFlight   StringOrInt
+	}{
+		{
+			name: "rate default is not applied",
+			reconciler: &ServiceReconciler{
+				ServiceNameTemplate:       "{namespace}-{name}-{port}",
+				AllowServiceName:          true,
+				MaxRatePerEndpointDefault: 1234,
+			},
+			config:   `{"backend_services":{"80":[{"name":"http-be","max_in_flight_requests_per_endpoint":8}]}}`,
+			inFlight: 8,
+		},
+		{
+			name: "connections default is not applied",
+			reconciler: &ServiceReconciler{
+				ServiceNameTemplate:              "{namespace}-{name}-{port}",
+				AllowServiceName:                 true,
+				MaxConnectionsPerEndpointDefault: 1234,
+			},
+			config:   `{"backend_services":{"80":[{"name":"http-be","max_in_flight_requests_per_endpoint":8}]}}`,
+			inFlight: 8,
+		},
+		{
+			name: "string value",
+			reconciler: &ServiceReconciler{
+				ServiceNameTemplate: "{namespace}-{name}-{port}",
+				AllowServiceName:    true,
+			},
+			config:   `{"backend_services":{"80":[{"name":"http-be","max_in_flight_requests_per_endpoint":"8"}]}}`,
+			inFlight: 8,
+		},
+		{
+			name: "non-integer value",
+			reconciler: &ServiceReconciler{
+				ServiceNameTemplate: "{namespace}-{name}-{port}",
+				AllowServiceName:    true,
+			},
+			config: `{"backend_services":{"80":[{"name":"http-be","max_in_flight_requests_per_endpoint":8.5}]}}`,
+			err:    true,
+		},
+	}
+
+	for _, ct := range tests {
+		t.Run(ct.name, func(t *testing.T) {
+			statuses, valid, err := getStatuses(context.Background(), "ns", "test", map[string]string{autonegAnnotation: ct.config}, ct.reconciler)
+			if ct.err {
+				if err == nil {
+					t.Fatalf("Expected an error, got none")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Expected no error, got one: %v", err)
+			}
+			if !valid {
+				t.Fatalf("Expected autoneg config, got none")
+			}
+			cfg, ok := statuses.config.BackendServices["80"]["http-be"]
+			if !ok {
+				t.Fatalf("Expected service config for http-be but got none, service statuses: \n%v", statuses.config.BackendServices)
+			}
+			if cfg.InFlight != ct.inFlight {
+				t.Errorf("Expected max_in_flight_requests_per_endpoint to be %d but got %d", ct.inFlight, cfg.InFlight)
+			}
+			if cfg.Rate != 0 || cfg.Connections != 0 {
+				t.Errorf("Expected no rate or connections to be set alongside in-flight, got rate %v and connections %v", cfg.Rate, cfg.Connections)
+			}
+		})
+	}
+}
+
 func TestValidateNewConfig(t *testing.T) {
 	tests := []struct {
 		name                   string
@@ -394,6 +471,8 @@ func TestValidateNewConfig(t *testing.T) {
 		expectedCapacityScaler float64
 		expectedBalancingMode  string
 		expectedPreference     string
+		expectedMaxInFlight    int64
+		expectedTraffic        string
 	}{
 		{
 			name:                   "default config",
@@ -661,6 +740,98 @@ func TestValidateNewConfig(t *testing.T) {
 			expectedBalancingMode:  "RATE",
 			expectedPreference:     "INVALID",
 		},
+		{
+			name: "valid in-flight",
+			config: AutonegConfig{
+				BackendServices: map[string]map[string]AutonegNEGConfig{
+					"80": {
+						"http-be": {
+							Name:     "http-be",
+							InFlight: 8,
+						},
+					},
+				},
+			},
+			err:                    false,
+			expectedCapacityScaler: 1,
+			expectedBalancingMode:  "IN_FLIGHT",
+			expectedMaxInFlight:    8,
+			expectedTraffic:        "LONG",
+		},
+		{
+			name: "negative in-flight",
+			config: AutonegConfig{
+				BackendServices: map[string]map[string]AutonegNEGConfig{
+					"80": {
+						"http-be": {
+							Name:        "http-be",
+							Connections: 100,
+							InFlight:    -1,
+						},
+					},
+				},
+			},
+			err:                    true,
+			expectedCapacityScaler: 1,
+			expectedBalancingMode:  "CONNECTION",
+		},
+		{
+			name: "in-flight combined with rate",
+			config: AutonegConfig{
+				BackendServices: map[string]map[string]AutonegNEGConfig{
+					"80": {
+						"http-be": {
+							Name:     "http-be",
+							Rate:     100,
+							InFlight: 8,
+						},
+					},
+				},
+			},
+			err:                    true,
+			expectedCapacityScaler: 1,
+			expectedBalancingMode:  "IN_FLIGHT",
+			expectedMaxInFlight:    8,
+			expectedTraffic:        "LONG",
+		},
+		{
+			name: "in-flight combined with connections",
+			config: AutonegConfig{
+				BackendServices: map[string]map[string]AutonegNEGConfig{
+					"80": {
+						"http-be": {
+							Name:        "http-be",
+							Connections: 100,
+							InFlight:    8,
+						},
+					},
+				},
+			},
+			err:                    true,
+			expectedCapacityScaler: 1,
+			expectedBalancingMode:  "IN_FLIGHT",
+			expectedMaxInFlight:    8,
+			expectedTraffic:        "LONG",
+		},
+		{
+			name: "in-flight combined with custom_metrics",
+			config: AutonegConfig{
+				BackendServices: map[string]map[string]AutonegNEGConfig{
+					"80": {
+						"http-be": {
+							Name:     "http-be",
+							InFlight: 8,
+							CustomMetrics: []AutonegCustomMetric{
+								{Name: "orca.named_metrics.cool_one", MaxUtilization: 0.8},
+							},
+						},
+					},
+				},
+			},
+			err:                    true,
+			expectedCapacityScaler: 1,
+			expectedBalancingMode:  "CUSTOM_METRICS",
+		},
 	}
 
 	for _, ct := range tests {
@@ -692,6 +863,14 @@ func TestValidateNewConfig(t *testing.T) {
 		if beConfig.Preference != ct.expectedPreference {
 			t.Errorf("Set %q: expected preference %q, got: %q", ct.name, ct.expectedPreference, beConfig.Preference)
 		}
+
+		if beConfig.MaxInFlightRequestsPerEndpoint != ct.expectedMaxInFlight {
+			t.Errorf("Set %q: expected max in-flight requests per endpoint %d, got: %d", ct.name, ct.expectedMaxInFlight, beConfig.MaxInFlightRequestsPerEndpoint)
+		}
+
+		if beConfig.TrafficDuration != ct.expectedTraffic {
+			t.Errorf("Set %q: expected traffic duration %q, got: %q", ct.name, ct.expectedTraffic, beConfig.TrafficDuration)
+		}
 	}
 }
 
@@ -700,6 +879,8 @@ func relevantCopy(a compute.Backend) compute.Backend {
 	b.Group = a.Group
 	b.MaxRatePerEndpoint = a.MaxRatePerEndpoint
 	b.MaxConnectionsPerEndpoint = a.MaxConnectionsPerEndpoint
+	b.MaxInFlightRequestsPerEndpoint = a.MaxInFlightRequestsPerEndpoint
+	b.TrafficDuration = a.TrafficDuration
 	b.Preference = a.Preference
 	if len(a.CustomMetrics) > 0 {
 		b.CustomMetrics = slices.Collect(func(yield func(*compute.BackendCustomMetric) bool) {
@@ -1309,6 +1490,170 @@ func TestReconcileBackendsWithCustomMetricsAgainstFakeServer(t *testing.T) {
 	if fbss.bss["fake"].Backends[0].BalancingMode != "CUSTOM_METRICS" {
 		t.Fatalf("Configured backend is not CUSTOM_METRICS balancing mode: %s",
 			fbss.bss["fake"].Backends[0].BalancingMode)
+	}
+}
+
+func TestReconcileBackendsKeepsOutOfBandTrafficDuration(t *testing.T) {
+	project := "test-project"
+	negStatusOneZone := NEGStatus{
+		NEGs:  map[string]string{"80": "fake_neg"},
+		Zones: []string{"zone1"},
+	}
+	statusWith := func(cfg AutonegNEGConfig) AutonegStatus {
+		return AutonegStatus{
+			AutonegConfig: AutonegConfig{
+				BackendServices: map[string]map[string]AutonegNEGConfig{"80": {"fake": cfg}},
+			},
+			NEGStatus: negStatusOneZone,
+		}
+	}
+	metric := []AutonegCustomMetric{{Name: "orca.named_metrics.cool_one", MaxUtilization: 0.8}}
+	as := statusWith(AutonegNEGConfig{Name: "fake", CustomMetrics: metric})
+	is := statusWith(AutonegNEGConfig{Name: "fake", CustomMetrics: metric, Preference: "PREFERRED"})
+	ab := as.Backend("fake", "80", getGroup(project, negStatusOneZone.Zones[0], negStatusOneZone.NEGs["80"]))
+	ab.TrafficDuration = "LONG"
+
+	fbss := newFakeBackendServiceServer(
+		map[string]*compute.BackendService{"fake": {
+			Kind:            "compute#backendService",
+			Id:              1,
+			Name:            "fake",
+			ForceSendFields: []string{"Backends"},
+			Backends:        []*compute.Backend{&ab},
+		}},
+		map[string][][2]string{"fake": {{"GET", "backendServices"}, {"PATCH", "backendServices"}, {"GET", "operations"}}},
+		map[string][]string{"fake": {computeOperationStatusDone}},
+		t)
+	defer fbss.Close()
+
+	cs, err := compute.NewService(t.Context(), option.WithEndpoint(fbss.URL), option.WithoutAuthentication())
+	if err != nil {
+		t.Fatalf("Failed to instantiate compute service: %v", err)
+	}
+	bc := ProdBackendController{
+		project: project,
+		s:       cs,
+	}
+
+	if err := bc.ReconcileBackends(context.Background(), as, is, false); err != nil {
+		t.Fatalf("ReconcileBackends() got err: %v, want none", err)
+	}
+	if len(fbss.bsExpectedCalls["fake"]) != 0 {
+		t.Fatalf("Some expected calls not done, remaining uncalled: %v", fbss.bsExpectedCalls["fake"])
+	}
+
+	be := fbss.bss["fake"].Backends[0]
+	if be.Preference != "PREFERRED" {
+		t.Errorf("Expected preference to be updated to PREFERRED, got %q", be.Preference)
+	}
+	if be.TrafficDuration != "LONG" {
+		t.Errorf("Expected out-of-band traffic duration LONG to be kept, got %q", be.TrafficDuration)
+	}
+}
+
+func TestReconcileBackendsWithInFlightAgainstFakeServer(t *testing.T) {
+	project := "test-project"
+	negStatusOneZone := NEGStatus{
+		NEGs:  map[string]string{"80": "fake_neg"},
+		Zones: []string{"zone1"},
+	}
+	statusWith := func(cfg AutonegNEGConfig) AutonegStatus {
+		return AutonegStatus{
+			AutonegConfig: AutonegConfig{
+				BackendServices: map[string]map[string]AutonegNEGConfig{"80": {"fake": cfg}},
+			},
+			NEGStatus: negStatusOneZone,
+		}
+	}
+
+	tests := []struct {
+		name            string
+		actual          AutonegNEGConfig
+		intended        AutonegNEGConfig
+		expectedMode    string
+		expectedRate    float64
+		expectedFlight  int64
+		expectedTraffic string
+	}{
+		{
+			name:            "rate to in-flight",
+			actual:          AutonegNEGConfig{Name: "fake", Rate: 100},
+			intended:        AutonegNEGConfig{Name: "fake", InFlight: 8},
+			expectedMode:    "IN_FLIGHT",
+			expectedFlight:  8,
+			expectedTraffic: "LONG",
+		},
+		{
+			name:            "in-flight value change",
+			actual:          AutonegNEGConfig{Name: "fake", InFlight: 8},
+			intended:        AutonegNEGConfig{Name: "fake", InFlight: 16},
+			expectedMode:    "IN_FLIGHT",
+			expectedFlight:  16,
+			expectedTraffic: "LONG",
+		},
+		{
+			name:            "in-flight to rate",
+			actual:          AutonegNEGConfig{Name: "fake", InFlight: 8},
+			intended:        AutonegNEGConfig{Name: "fake", Rate: 100},
+			expectedMode:    "RATE",
+			expectedRate:    100,
+			expectedTraffic: "SHORT",
+		},
+	}
+
+	for _, ct := range tests {
+		t.Run(ct.name, func(t *testing.T) {
+			as := statusWith(ct.actual)
+			is := statusWith(ct.intended)
+			ab := as.Backend("fake", "80", getGroup(project, negStatusOneZone.Zones[0], negStatusOneZone.NEGs["80"]))
+
+			fbss := newFakeBackendServiceServer(
+				map[string]*compute.BackendService{"fake": {
+					Kind:            "compute#backendService",
+					Id:              1,
+					Name:            "fake",
+					ForceSendFields: []string{"Backends"},
+					Backends:        []*compute.Backend{&ab},
+				}},
+				map[string][][2]string{"fake": {{"GET", "backendServices"}, {"PATCH", "backendServices"}, {"GET", "operations"}}},
+				map[string][]string{"fake": {computeOperationStatusDone}},
+				t)
+			defer fbss.Close()
+
+			cs, err := compute.NewService(t.Context(), option.WithEndpoint(fbss.URL), option.WithoutAuthentication())
+			if err != nil {
+				t.Fatalf("Failed to instantiate compute service: %v", err)
+			}
+			bc := ProdBackendController{
+				project: project,
+				s:       cs,
+			}
+
+			if err := bc.ReconcileBackends(context.Background(), as, is, false); err != nil {
+				t.Fatalf("ReconcileBackends() got err: %v, want none", err)
+			}
+
+			if len(fbss.bsExpectedCalls["fake"]) != 0 {
+				t.Fatalf("Some expected calls not done, remaining uncalled: %v", fbss.bsExpectedCalls["fake"])
+			}
+
+			be := fbss.bss["fake"].Backends[0]
+			if be.BalancingMode != ct.expectedMode {
+				t.Errorf("Expected %s balancing mode, got %q", ct.expectedMode, be.BalancingMode)
+			}
+			if be.MaxInFlightRequestsPerEndpoint != ct.expectedFlight {
+				t.Errorf("Expected max in-flight requests per endpoint %d, got %d", ct.expectedFlight, be.MaxInFlightRequestsPerEndpoint)
+			}
+			if be.MaxRatePerEndpoint != ct.expectedRate {
+				t.Errorf("Expected max rate per endpoint %v, got %v", ct.expectedRate, be.MaxRatePerEndpoint)
+			}
+			if be.MaxConnectionsPerEndpoint != 0 {
+				t.Errorf("Expected connections to be cleared, got %v", be.MaxConnectionsPerEndpoint)
+			}
+			if be.TrafficDuration != ct.expectedTraffic {
+				t.Errorf("Expected traffic duration %q, got %q", ct.expectedTraffic, be.TrafficDuration)
+			}
+		})
 	}
 }
 

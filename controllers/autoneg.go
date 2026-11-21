@@ -99,7 +99,8 @@ func (s AutonegStatus) Backend(name string, port string, group string) compute.B
 		}
 	}
 
-	// Prefer the custom_metrics balancing mode if set, then prefer rate balancing mode if set
+	// Prefer the custom_metrics balancing mode if set, then in-flight, then rate.
+	// validateConfig rejects in-flight combined with any other balancing mode.
 	if len(cfg.CustomMetrics) > 0 {
 		return compute.Backend{
 			Group:         group,
@@ -113,6 +114,15 @@ func (s AutonegStatus) Backend(name string, port string, group string) compute.B
 			}),
 			CapacityScaler: capacityScaler,
 			Preference:     cfg.Preference,
+		}
+	} else if cfg.InFlight > 0 {
+		return compute.Backend{
+			Group:                          group,
+			BalancingMode:                  "IN_FLIGHT",
+			MaxInFlightRequestsPerEndpoint: int64(cfg.InFlight),
+			TrafficDuration:                "LONG",
+			CapacityScaler:                 capacityScaler,
+			Preference:                     cfg.Preference,
 		}
 	} else if cfg.Rate > 0 {
 		return compute.Backend{
@@ -191,6 +201,9 @@ func (b *ProdBackendController) compareBackends(left compute.Backend, right comp
 		return false
 	}
 	if left.MaxRatePerEndpoint != right.MaxRatePerEndpoint {
+		return false
+	}
+	if left.MaxInFlightRequestsPerEndpoint != right.MaxInFlightRequestsPerEndpoint {
 		return false
 	}
 	// The API's DEFAULT preference is equivalent to an omitted preference.
@@ -385,9 +398,17 @@ func (b *ProdBackendController) ReconcileBackends(ctx context.Context, actual, i
 				for _, be := range newSvc.Backends {
 					if u.Group == be.Group {
 						// TODO: copy fields explicitly
+						wasInFlight := be.BalancingMode == "IN_FLIGHT"
 						be.BalancingMode = u.BalancingMode
 						be.MaxRatePerEndpoint = u.MaxRatePerEndpoint
 						be.MaxConnectionsPerEndpoint = u.MaxConnectionsPerEndpoint
+						be.MaxInFlightRequestsPerEndpoint = u.MaxInFlightRequestsPerEndpoint
+						if u.TrafficDuration != "" {
+							be.TrafficDuration = u.TrafficDuration
+						} else if wasInFlight {
+							// Leaving IN_FLIGHT: go back to the default traffic duration, the only one RATE supports.
+							be.TrafficDuration = "SHORT"
+						}
 						if u.Preference == "" && be.Preference != "" {
 							// Explicitly reset a preference when its configuration is removed.
 							be.Preference = "DEFAULT"
@@ -622,6 +643,13 @@ func validateConfig(config AutonegConfig) error {
 				}
 			}
 
+			if cfg.InFlight < 0 {
+				return fmt.Errorf("max_in_flight_requests_per_endpoint for backend %q must not be negative, but was %d", cfg.Name, cfg.InFlight)
+			}
+			if cfg.InFlight > 0 && (cfg.Rate != 0 || cfg.Connections != 0 || len(cfg.CustomMetrics) > 0) {
+				return fmt.Errorf("max_in_flight_requests_per_endpoint for backend %q cannot be combined with max_rate_per_endpoint, max_connections_per_endpoint or custom_metrics; see https://cloud.google.com/load-balancing/docs/backend-service#bmtc-inflight for details", cfg.Name)
+			}
+
 			if len(cfg.CustomMetrics) > 0 {
 				if len(cfg.CustomMetrics) > 3 {
 					return fmt.Errorf("too many custom_metrics for backend %q must be at most 3, but was %q; see https://docs.cloud.google.com/load-balancing/docs/https/applb-custom-metrics#metrics-limits-requirements for details", cfg.Name, len(cfg.CustomMetrics))
@@ -710,8 +738,8 @@ func getStatuses(ctx context.Context, namespace string, name string, annotations
 					cfg.Name = generateServiceName(namespace, name, port, r.ServiceNameTemplate)
 				}
 
-				//Use defaults if rate and connections have not been set
-				if cfg.Rate == 0 && cfg.Connections == 0 {
+				//Use defaults if rate, connections and in-flight have not been set
+				if cfg.Rate == 0 && cfg.Connections == 0 && cfg.InFlight == 0 {
 					if r.MaxRatePerEndpointDefault > 0 {
 						cfg.Rate = StringOrFloat(r.MaxRatePerEndpointDefault)
 					} else {

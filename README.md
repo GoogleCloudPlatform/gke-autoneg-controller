@@ -40,6 +40,8 @@ metadata:
     controller.autoneg.dev/neg: '{"backend_services":{"80":[{"name":"http-be","max_rate_per_endpoint":100}],"443":[{"name":"https-be","max_connections_per_endpoint":1000}]}}
     # For L7 ILB (regional) backends
     # controller.autoneg.dev/neg: '{"backend_services":{"80":[{"name":"http-be","region":"europe-west4","max_rate_per_endpoint":100}],"443":[{"name":"https-be","region":"europe-west4","max_connections_per_endpoint":1000}]}}
+    # For long-running requests (IN_FLIGHT balancing mode)
+    # controller.autoneg.dev/neg: '{"backend_services":{"80":[{"name":"llm-be","max_in_flight_requests_per_endpoint":8}]}}'
 ```
 
 Once configured, `autoneg` will detect the NEGs that are created by the GKE NEG controller, and register them with the backend
@@ -68,8 +70,9 @@ Specify options to configure the backends representing the NEGs that will be ass
 * `region`: optional. Used to specify that this is a regional backend service.
 * `preference`: optional. `PREFERRED` or `DEFAULT`. An explicit value takes precedence over `preferred_regions` for this backend.
 * `preferred_regions`: optional. A list of GCP regions such as `["us-central1", "europe-west1"]`. When `preference` is omitted, the controller sets this backend to `PREFERRED` in any listed region and `DEFAULT` elsewhere.
-* `max_rate_per_endpoint`: required/optional. Integer representing the maximum rate a pod can handle. Pick either rate or connection.
-* `max_connections_per_endpoint`: required/optional. Integer representing the maximum amount of connections a pod can handle. Pick either rate or connection.
+* `max_rate_per_endpoint`: required/optional. Integer representing the maximum rate a pod can handle. Pick one of rate, connections or in-flight requests.
+* `max_connections_per_endpoint`: required/optional. Integer representing the maximum amount of connections a pod can handle. Pick one of rate, connections or in-flight requests.
+* `max_in_flight_requests_per_endpoint`: optional. Integer representing the target number of in-progress requests a pod can handle. Sets the backend to the [`IN_FLIGHT` balancing mode](https://cloud.google.com/load-balancing/docs/backend-service#bmtc-inflight), which suits long-running requests such as streaming or AI inference. Cannot be combined with `max_rate_per_endpoint`, `max_connections_per_endpoint` or `custom_metrics`. Requires an Application Load Balancer (not classic). `autoneg` sets the backend's `trafficDuration` to `LONG`, which this balancing mode requires, and back to `SHORT` when switching to another mode.
 * `initial_capacity`: optional. Integer configuring the initial capacityScaler, expressed as a percentage between 0 and 100. If set to 0, the backend service will not receive any traffic until an operator or other service adjusts the [capacity scaler setting](https://cloud.google.com/load-balancing/docs/backend-service#capacity_scaler). Please note that unless you have existing backends in a backend service, you cannot set `initial_capacity` to zero (at least some backends have to higher than zero value).
 * `capacity_scaler`: optional. Autoneg manages the [capacity scaler setting](https://cloud.google.com/load-balancing/docs/backend-service#capacity_scaler) if this and the `controller.autoneg.dev/sync: '{"capacity_scaler":true}'` annotation is set on the service. Please note updating `capacityScaler` setting out of band (eg. via `gcloud`) won't be overridden until you change the `capacity_scaler` (or other value) in the service configuration.
 
