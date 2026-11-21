@@ -367,6 +367,56 @@ var _ = Describe("Run autoneg Controller for balancing modes", func() {
 			})
 		})
 
+		Context("Update Service with autoneg annotations for IN_FLIGHT balancing mode", func() {
+			It("reacts on service patch", func() {
+				service := &corev1.Service{}
+				service.SetNamespace(serviceKey.Namespace)
+				service.SetName(serviceKey.Name)
+				var autonegAnnotVal strings.Builder
+				autonegAnnot := M{"backend_services": M{
+					portStr: []M{{"name": bsName, "max_in_flight_requests_per_endpoint": 8}},
+				}}
+				json.NewEncoder(&autonegAnnotVal).Encode(autonegAnnot)
+				autonegAnnotationEscaped := "controller.autoneg.dev~1neg"
+				patchOp := []struct {
+					Op    string `json:"op"`
+					Path  string `json:"path"`
+					Value string `json:"value"`
+				}{{
+					Op:    "replace",
+					Path:  "/metadata/annotations/" + autonegAnnotationEscaped,
+					Value: autonegAnnotVal.String(),
+				}}
+				var patchBytes bytes.Buffer
+				json.NewEncoder(&patchBytes).Encode(patchOp)
+
+				Expect(k8sClient.Get(ctx, serviceKey, service)).ToNot(HaveOccurred())
+				autonegStatusAnnotationValue := service.GetAnnotations()[autonegStatusAnnotation]
+				Expect(k8sClient.Patch(ctx, service, client.RawPatch(types.JSONPatchType, patchBytes.Bytes()))).NotTo(HaveOccurred(), "failed to patch service resource")
+
+				waitForAutonegStatusAnnotationChanged(ctx, k8sClient, service, autonegStatusAnnotationValue)
+
+				annots := service.GetAnnotations()
+				expectedAutonegStatusAnnotVal := M{"backend_services": M{portStr: M{
+					bsName: M{"name": bsName, "max_in_flight_requests_per_endpoint": 8}},
+				}, "network_endpoint_groups": as.NEGs, "zones": as.Zones}
+				var actualAutonegStatusAnnot, expectedAutonegStatusAnnot map[string]any
+				var expectedAutonegStatusAnnotBuffer strings.Builder
+				json.NewEncoder(&expectedAutonegStatusAnnotBuffer).Encode(expectedAutonegStatusAnnotVal)
+				json.NewDecoder(strings.NewReader(annots[autonegStatusAnnotation])).Decode(&actualAutonegStatusAnnot)
+				json.NewDecoder(strings.NewReader(expectedAutonegStatusAnnotBuffer.String())).Decode(&expectedAutonegStatusAnnot)
+				Expect(actualAutonegStatusAnnot).To(Equal(expectedAutonegStatusAnnot))
+
+				Expect(fakeServer.bss[bsName]).NotTo(BeNil())
+				Expect(fakeServer.bss[bsName].Backends).NotTo(BeNil())
+				Expect(len(fakeServer.bss[bsName].Backends)).To(Equal(1))
+				Expect(fakeServer.bss[bsName].Backends[0].BalancingMode).To(Equal("IN_FLIGHT"))
+				Expect(fakeServer.bss[bsName].Backends[0].MaxInFlightRequestsPerEndpoint).To(Equal(int64(8)))
+				Expect(fakeServer.bss[bsName].Backends[0].TrafficDuration).To(Equal("LONG"))
+				Expect(fakeServer.bss[bsName].Backends[0].CustomMetrics).To(BeEmpty())
+			})
+		})
+
 		Context("Remove the service", func() {
 
 			It("should succeed", func() {

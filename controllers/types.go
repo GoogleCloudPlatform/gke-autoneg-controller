@@ -71,6 +71,7 @@ type AutonegNEGConfig struct {
 	Region           string                `json:"region,omitempty"`
 	Rate             StringOrFloat         `json:"max_rate_per_endpoint,omitempty"`
 	Connections      StringOrFloat         `json:"max_connections_per_endpoint,omitempty"`
+	InFlight         StringOrInt           `json:"max_in_flight_requests_per_endpoint,omitempty"`
 	CustomMetrics    []AutonegCustomMetric `json:"custom_metrics,omitempty"`
 	InitialCapacity  *StringOrInt          `json:"initial_capacity,omitempty"`
 	CapacityScaler   *StringOrInt          `json:"capacity_scaler,omitempty"`
